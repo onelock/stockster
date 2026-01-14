@@ -3,7 +3,7 @@ set -e
 
 # GitHub username (change this to your GitHub username)
 GITHUB_USER="${GITHUB_USER:-onelock}"
-REGISTRY="ghcr.io/$GITHUB_USER"
+REGISTRY="ghcr.io/${GITHUB_USER,,}"  # Convert to lowercase
 
 # Generate unique image tag
 # Use git commit SHA if available, otherwise use timestamp
