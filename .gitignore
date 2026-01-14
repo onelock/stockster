@@ -1,0 +1,157 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.env
+.stockster_venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.stockster_venv/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+db/
+*.sql
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Docker
+*.tar
+*.tar.gz
+
+# Kubernetes secrets (DO NOT COMMIT)
+*secret*.yaml
+*-secret.yaml
+kubeconfig
+*.kubeconfig
+.kube/
+
+# Data files
+*.csv
+*.xlsx
+*.json
+data/
+*.parquet
+
+# Scraped data
+di_scraper/data/*
+!di_scraper/data/.gitkeep
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Playwright
+playwright/.cache/
+test-results/
+playwright-report/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# Build artifacts
+*.whl
+*.tar.gz
+*.zip
+
+# GitHub Actions cache
+.github/workflows/*.cache
+
+# Local configuration
+config.local.yml
+local_settings.py
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Certificates
+*.crt
+*.cert
+*.ca-bundle
+
+# Package manager
+poetry.lock
+Pipfile.lock

@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stockster-dashboard
+  namespace: stockster
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  revisionHistoryLimit: 5  # Keep last 5 revisions for rollback
+  selector:
+    matchLabels:
+      app: stockster-dashboard
+  template:
+    metadata:
+      labels:
+        app: stockster-dashboard
+    spec:
+      imagePullSecrets:
+      - name: ghcr-secret
+      
+      containers:
+      - name: dashboard
+        image: ghcr.io/onelock/stockster-dashboard:latest
+        imagePullPolicy: Always
+        
+        ports:
+        - containerPort: 8501
+          name: http
+        
+        env:
+        - name: DB_PATH
+          value: "/data/stocks_db.db"
+        
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+          readOnly: true  # Dashboard only reads
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8501
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: stockster-data-pvc
+          readOnly: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stockster-dashboard
+  namespace: stockster
+spec:
+  type: LoadBalancer  # Or ClusterIP with Ingress
+  ports:
+  - port: 80
+    targetPort: 8501
+    protocol: TCP
+  selector:
+    app: stockster-dashboard

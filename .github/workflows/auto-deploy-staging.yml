@@ -1,0 +1,110 @@
+name: Auto Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Get short SHA
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      
+      - name: Build and push scraper
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.scraper
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/stockster-scraper:main-${{ steps.sha.outputs.short }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/stockster-scraper:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build and push dashboard
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.dashboard
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/stockster-dashboard:main-${{ steps.sha.outputs.short }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/stockster-dashboard:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+      
+      - name: Deploy to staging
+        run: |
+          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
+          NAMESPACE="stockster-staging"
+          REGISTRY="${{ env.REGISTRY }}/${{ github.repository_owner }}"
+          
+          echo "Deploying version $IMAGE_TAG to staging..."
+          
+          # Update dashboard
+          kubectl set image deployment/stockster-dashboard \
+            dashboard=$REGISTRY/stockster-dashboard:$IMAGE_TAG \
+            -n $NAMESPACE \
+            --record
+          
+          # Update scraper cronjob
+          kubectl set image cronjob/stockster-scraper \
+            scraper=$REGISTRY/stockster-scraper:$IMAGE_TAG \
+            -n $NAMESPACE \
+            --record
+          
+          echo "Waiting for rollout..."
+          kubectl rollout status deployment/stockster-dashboard -n $NAMESPACE --timeout=5m
+          
+          echo "✓ Deployed successfully to staging!"
+      
+      - name: Create deployment summary
+        run: |
+          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: Staging" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: \`$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Author**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ github.repository_owner }}/stockster-scraper:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ github.repository_owner }}/stockster-dashboard:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY

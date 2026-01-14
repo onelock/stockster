@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stockster-data-pvc
+  namespace: stockster
+spec:
+  accessModes:
+    - ReadWriteMany  # Shared between scraper and dashboard
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard  # Adjust based on your cluster

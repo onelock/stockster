@@ -1,0 +1,89 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      revision:
+        description: 'Revision number to rollback to (leave empty for previous)'
+        required: false
+        type: string
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+      
+      - name: Show current deployment
+        run: |
+          NAMESPACE="stockster-${{ inputs.environment }}"
+          
+          echo "Current deployment:"
+          kubectl get deployment stockster-dashboard -n $NAMESPACE \
+            -o jsonpath='{.spec.template.spec.containers[0].image}'
+          echo ""
+          
+          echo ""
+          echo "Deployment history:"
+          kubectl rollout history deployment/stockster-dashboard -n $NAMESPACE
+      
+      - name: Perform rollback
+        run: |
+          NAMESPACE="stockster-${{ inputs.environment }}"
+          
+          if [ -n "${{ inputs.revision }}" ]; then
+            echo "Rolling back to revision ${{ inputs.revision }}..."
+            kubectl rollout undo deployment/stockster-dashboard \
+              --to-revision=${{ inputs.revision }} \
+              -n $NAMESPACE
+          else
+            echo "Rolling back to previous revision..."
+            kubectl rollout undo deployment/stockster-dashboard -n $NAMESPACE
+          fi
+          
+          echo "Waiting for rollback to complete..."
+          kubectl rollout status deployment/stockster-dashboard -n $NAMESPACE --timeout=5m
+          
+          echo "✓ Rollback successful!"
+      
+      - name: Verify rollback
+        run: |
+          NAMESPACE="stockster-${{ inputs.environment }}"
+          
+          echo "New deployment version:"
+          kubectl get deployment stockster-dashboard -n $NAMESPACE \
+            -o jsonpath='{.spec.template.spec.containers[0].image}'
+          echo ""
+          
+          echo ""
+          echo "Pod status:"
+          kubectl get pods -n $NAMESPACE -l app=stockster-dashboard
+      
+      - name: Create rollback summary
+        run: |
+          echo "## 🔄 Rollback Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✓ Complete" >> $GITHUB_STEP_SUMMARY
