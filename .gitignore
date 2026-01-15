@@ -155,3 +155,7 @@ id_ed25519*
 # Package manager
 poetry.lock
 Pipfile.lock
+
+
+# config
+k3s.yaml

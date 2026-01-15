@@ -1,93 +1,10 @@
 from playwright.sync_api import sync_playwright
-import sqlite3
 import datetime
 import os
 from data_utils import clean_number, clean_integer
+from db_utils import init_db, get_db_connection
 
-# Get path relative to this script's location
-script_dir = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(script_dir, "..", "db", "stocks_db.db")
 DEBUG = 0
-
-def init_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10.0)
-    try:
-        c = conn.cursor()
-        c.execute("PRAGMA journal_mode=WAL")
-        c.execute("PRAGMA synchronous=NORMAL")  # Faster writes, still safe with WAL
-        c.execute("PRAGMA cache_size=-64000")  # 64MB cache
-        
-        # Current trading data (Kurser)
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS stocks_trading (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                name TEXT NOT NULL,
-                last_price REAL,
-                change_abs REAL,
-                change_pct REAL,
-                highest REAL,
-                lowest REAL,
-                volume INTEGER,
-                market_value INTEGER,
-                href TEXT
-            )
-        """)
-        
-        # Create indexes for fast queries
-        c.execute("""
-            CREATE INDEX IF NOT EXISTS idx_trading_name_timestamp 
-            ON stocks_trading(name, timestamp DESC)
-        """)
-        
-        c.execute("""
-            CREATE INDEX IF NOT EXISTS idx_trading_timestamp 
-            ON stocks_trading(timestamp DESC)
-        """)
-        
-        # Historical comparison data (Historik)
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS stocks_historical (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                name TEXT NOT NULL,
-                year_high REAL,
-                date_year_high TEXT,
-                change_1d REAL,
-                change_1m REAL,
-                change_in_y REAL,
-                change_1y REAL
-            )
-        """)
-        
-        c.execute("""
-            CREATE INDEX IF NOT EXISTS idx_historical_name_timestamp 
-            ON stocks_historical(name, timestamp DESC)
-        """)
-        
-        # Key metrics/ratios (Nyckeltal)
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS stocks_metrics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                name TEXT NOT NULL,
-                pe_ratio REAL,
-                ps_ratio REAL,
-                earning_per_share REAL,
-                equity_per_share REAL,
-                dividend_yield REAL,
-                direct_return REAL
-            )
-        """)
-        
-        c.execute("""
-            CREATE INDEX IF NOT EXISTS idx_metrics_name_timestamp 
-            ON stocks_metrics(name, timestamp DESC)
-        """)
-        
-        conn.commit()
-    finally:
-        conn.close()
 
 def scrape_disestockdata():
     with sync_playwright() as p:
@@ -166,7 +83,12 @@ def scrape_disestockdata():
 
     timestamp = datetime.datetime.now().isoformat(timespec="seconds")
 
-    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+    conn, db_type = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Prepare parameter placeholder based on db type
+    param = '%s' if db_type == 'postgresql' else '?'
+    
     for stock_index, stock in enumerate(extracted):
         href = stock['href']
         
@@ -180,10 +102,10 @@ def scrape_disestockdata():
         # Insert trading data
         if stock['trading'] and len(stock['trading']) >= 8:
             t = stock['trading']
-            conn.execute("""
+            cursor.execute(f"""
                 INSERT INTO stocks_trading 
                 (timestamp, name, last_price, change_abs, change_pct, highest, lowest, volume, market_value, href)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES ({param}, {param}, {param}, {param}, {param}, {param}, {param}, {param}, {param}, {param})
             """, (
                 timestamp, 
                 t[0],  # name
@@ -200,10 +122,10 @@ def scrape_disestockdata():
         # Insert historical data
         if stock['historical'] and len(stock['historical']) >= 7:
             h = stock['historical']
-            conn.execute("""
+            cursor.execute(f"""
                 INSERT INTO stocks_historical
                 (timestamp, name, year_high, date_year_high, change_1d, change_1m, change_in_y, change_1y)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES ({param}, {param}, {param}, {param}, {param}, {param}, {param}, {param})
             """, (
                 timestamp,
                 h[0],  # name
@@ -218,10 +140,10 @@ def scrape_disestockdata():
         # Insert metrics data
         if stock['metrics'] and len(stock['metrics']) >= 7:
             m = stock['metrics']
-            conn.execute("""
+            cursor.execute(f"""
                 INSERT INTO stocks_metrics
                 (timestamp, name, pe_ratio, ps_ratio, earning_per_share, equity_per_share, dividend_yield, direct_return)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES ({param}, {param}, {param}, {param}, {param}, {param}, {param}, {param})
             """, (
                 timestamp,
                 m[0],  # name

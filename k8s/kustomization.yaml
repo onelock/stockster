@@ -5,6 +5,8 @@ namespace: stockster
 
 resources:
   - namespace.yaml
+  - postgres-secret.yaml
+  - postgres-statefulset.yaml
   - pvc.yaml
   - dashboard-deployment.yaml
   - cronjob.yaml

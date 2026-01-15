@@ -73,13 +73,46 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
       
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace stockster --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Create or update ghcr-secret
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=${{ env.REGISTRY }} \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --namespace=stockster \
+            --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Create or update postgres-secret
+        run: |
+          kubectl create secret generic postgres-secret \
+            --from-literal=username=stockster \
+            --from-literal=password=${{ secrets.POSTGRES_PASSWORD }} \
+            --from-literal=database=stockster \
+            --from-literal=host=postgres \
+            --from-literal=port=5432 \
+            --namespace=stockster \
+            --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Deploy all resources
+        run: |
+          kubectl apply -k k8s/
+          
+          echo "Waiting for PostgreSQL to be ready..."
+          kubectl wait --for=condition=ready pod -l app=postgres -n stockster --timeout=5m || true
+          
+          echo "✓ Infrastructure deployed successfully!"
+      
       - name: Deploy to staging
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
-          NAMESPACE="stockster-staging"
+          NAMESPACE="stockster"
           REGISTRY="${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}"
           
-          echo "Deploying version $IMAGE_TAG to staging..."
+          echo "Deploying version $IMAGE_TAG..."
           
           # Update dashboard
           kubectl set image deployment/stockster-dashboard \
@@ -96,14 +129,14 @@ jobs:
           echo "Waiting for rollout..."
           kubectl rollout status deployment/stockster-dashboard -n $NAMESPACE --timeout=5m
           
-          echo "✓ Deployed successfully to staging!"
+          echo "✓ Deployed successfully!"
       
       - name: Create deployment summary
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: Staging" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: Production (stockster)" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: \`$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Author**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
@@ -111,3 +144,9 @@ jobs:
           echo "### Images Published" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployed Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- PostgreSQL Database" >> $GITHUB_STEP_SUMMARY
+          echo "- Dashboard (2 replicas)" >> $GITHUB_STEP_SUMMARY
+          echo "- Scraper CronJob (every 15min)" >> $GITHUB_STEP_SUMMARY
+

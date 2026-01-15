@@ -34,12 +34,33 @@ spec:
             command: ["python3", "di_scraper/scrape_di.py"]
             
             env:
-            - name: DB_PATH
-              value: "/data/stocks_db.db"
-            
-            volumeMounts:
-            - name: data-volume
-              mountPath: /data
+            - name: DATABASE_TYPE
+              value: "postgresql"
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: host
+            - name: POSTGRES_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: port
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: database
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
             
             resources:
               requests:
@@ -48,8 +69,3 @@ spec:
               limits:
                 memory: "512Mi"
                 cpu: "500m"
-          
-          volumes:
-          - name: data-volume
-            persistentVolumeClaim:
-              claimName: stockster-data-pvc
