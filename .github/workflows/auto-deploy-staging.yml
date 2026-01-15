@@ -10,162 +10,127 @@ env:
   REPO_OWNER_LC: onelock
 
 jobs:
-  build-and-deploy:
+  # STEP 1: Detect what changed
+  detect-changes:
     runs-on: ubuntu-latest
-    environment: staging
-    
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      scraper: ${{ steps.filter.outputs.scraper }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+              - 'main.py'
+              - 'Dockerfile.api'
+              - 'requirements.txt'
+            scraper:
+              - 'scraper/**'
+              - 'Dockerfile.scraper'
+            dashboard:
+              - 'dashboard/**'
+              - 'Dockerfile.dashboard'
+
+  # STEP 2: Build only the modified images
+  build-and-push:
+    needs: detect-changes
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: Log in to GitHub Container Registry
+
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Get short SHA
         id: sha
         run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-      
-      - name: Build and push scraper
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.scraper
-          push: true
-          tags: |
-            ghcr.io/onelock/stockster-scraper:main-${{ steps.sha.outputs.short }}
-            ghcr.io/onelock/stockster-scraper:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      - name: Build and push dashboard
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.dashboard
-          push: true
-          tags: |
-            ghcr.io/onelock/stockster-dashboard:main-${{ steps.sha.outputs.short }}
-            ghcr.io/onelock/stockster-dashboard:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
+
+      # Conditional API Build
       - name: Build and push API
+        if: needs.detect-changes.outputs.api == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.api
           push: true
-          tags: |
-            ghcr.io/onelock/stockster-api:main-${{ steps.sha.outputs.short }}
-            ghcr.io/onelock/stockster-api:latest
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-api:main-${{ steps.sha.outputs.short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      
+
+      # Conditional Scraper Build
+      - name: Build and push Scraper
+        if: needs.detect-changes.outputs.scraper == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.scraper
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:main-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Conditional Dashboard Build
+      - name: Build and push Dashboard
+        if: needs.detect-changes.outputs.dashboard == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.dashboard
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard:main-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # STEP 3: Deploy to Kubernetes
+  deploy:
+    needs: [detect-changes, build-and-push]
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
-      
+
       - name: Configure kubectl
         run: |
           mkdir -p $HOME/.kube
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
-      
-      - name: Create namespace if not exists
-        run: |
-          kubectl create namespace stockster --dry-run=client -o yaml | kubectl apply -f -
-      
-      - name: Create or update ghcr-secret
-        run: |
-          kubectl create secret docker-registry ghcr-secret \
-            --docker-server=${{ env.REGISTRY }} \
-            --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.GITHUB_TOKEN }} \
-            --namespace=stockster \
-            --dry-run=client -o yaml | kubectl apply -f -
-      
-      - name: Create or update postgres-secret
-        run: |
-          kubectl create secret generic postgres-secret \
-            --from-literal=username=stockster \
-            --from-literal=password=${{ secrets.POSTGRES_PASSWORD }} \
-            --from-literal=database=stockster \
-            --from-literal=host=postgres \
-            --from-literal=port=5432 \
-            --namespace=stockster \
-            --dry-run=client -o yaml | kubectl apply -f -
-      
-      - name: Deploy all resources
-        run: |
-          kubectl apply -k k8s/
-          
-          echo "Waiting for PostgreSQL to be ready..."
-          kubectl wait --for=condition=ready pod -l app=postgres -n stockster --timeout=5m || true
-          
-          echo "✓ Infrastructure deployed successfully!"
-      
-      - name: Deploy to staging
-        run: |
-          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
-          NAMESPACE="stockster"
-          
-          echo "Deploying version $IMAGE_TAG..."
-          
-          # Update dashboard
-          kubectl set image deployment/stockster-dashboard \
-            dashboard=ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG \
-            -n $NAMESPACE \
-            --record
-          
-          # Update API
-          kubectl set image deployment/stockster-api \
-            api=ghcr.io/onelock/stockster-api:$IMAGE_TAG \
-            -n $NAMESPACE \
-            --record
-          
-          # Update scraper cronjob
-          kubectl set image cronjob/stockster-scraper \
-            scraper=ghcr.io/onelock/stockster-scraper:$IMAGE_TAG \
-            -n $NAMESPACE \
-            --record
-          
-          echo "Waiting for rollout..."
-          kubectl rollout status deployment/stockster-dashboard -n $NAMESPACE --timeout=5m
-          kubectl rollout status deployment/stockster-api -n $NAMESPACE --timeout=5m
-          kubectl rollout status deployment/stockster-scraper -n $NAMESPACE --timeout=5m
-          
-          echo "✓ Deployed successfully!"
-      
-      - name: Create deployment summary
-        run: |
-          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: Production (stockster)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: \`$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Author**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Images Published" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/onelock/stockster-scraper:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/onelock/stockster-api:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployed Resources" >> $GITHUB_STEP_SUMMARY
-          echo "- PostgreSQL Database" >> $GITHUB_STEP_SUMMARY
-          echo "- REST API (2 replicas)" >> $GITHUB_STEP_SUMMARY
-          echo "- Dashboard (2 replicas)" >> $GITHUB_STEP_SUMMARY
-          echo "- Scraper CronJob (every 15min)" >> $GITHUB_STEP_SUMMARY
 
+      - name: Update Kustomize Images
+        run: |
+          cd k8s
+          SHA_TAG="main-$(git rev-parse --short HEAD)"
+          # Use Kustomize to set the new images instead of sed
+          if [ "${{ needs.detect-changes.outputs.api }}" == "true" ]; then
+            kustomize edit set image api=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-api:$SHA_TAG
+          fi
+          if [ "${{ needs.detect-changes.outputs.dashboard }}" == "true" ]; then
+            kustomize edit set image dashboard=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard:$SHA_TAG
+          fi
+          if [ "${{ needs.detect-changes.outputs.scraper }}" == "true" ]; then
+            kustomize edit set image scraper=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:$SHA_TAG
+          fi
+
+      - name: Apply and Wait
+        run: |
+          kubectl apply -k k8s/ --namespace=stockster
+          kubectl rollout status deployment/stockster-api -n stockster --timeout=3m
+          kubectl rollout status deployment/stockster-dashboard -n stockster --timeout=3m
