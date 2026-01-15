@@ -2,7 +2,6 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: stockster-scraper
-  namespace: stockster
 spec:
   # Every 15 minutes during market hours (9:00-17:30 CET, Mon-Fri)
   schedule: "*/15 9-17 * * 1-5"
@@ -28,7 +27,7 @@ spec:
           
           containers:
           - name: scraper
-            image: ghcr.io/onelock/stockster-scraper:latest
+            image: stockster/scraper
             imagePullPolicy: Always
             
             command: ["python3", "di_scraper/scrape_di.py"]
