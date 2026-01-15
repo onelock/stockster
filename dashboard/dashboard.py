@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import sqlite3
+import requests
 import os
 import sys
 
@@ -13,30 +13,69 @@ from analysis.signals import add_signals
 from analysis.backtest import backtest
 # from analysis.alerts import check_alerts
 
-
-# Get path relative to this script's location
-script_dir = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(script_dir, "..", "db", "stocks_db.db")
+# API configuration
+API_URL = os.environ.get('API_URL', 'http://127.0.0.1:8000')
 
 @st.cache_data(ttl=60)
 def load_data():
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM stocks_trading", conn)
-    conn.close()
+    """Load latest stock data from API"""
+    try:
+        response = requests.get(f"{API_URL}/stocks/latest?limit=1000", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get('stocks'):
+            st.error("No data available")
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(data['stocks'])
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df["last_price"] = pd.to_numeric(df["last_price"], errors="coerce")
+        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+        return df
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to load data from API: {e}")
+        return pd.DataFrame()
 
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-    df["last_price"] = pd.to_numeric(df["last_price"], errors="coerce")
-    df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
-    return df
+@st.cache_data(ttl=60)
+def load_stock_history(stock_name, days=30):
+    """Load historical data for a specific stock"""
+    try:
+        response = requests.get(f"{API_URL}/stocks/{stock_name}?days={days}", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get('data'):
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(data['data'])
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df["last_price"] = pd.to_numeric(df["last_price"], errors="coerce")
+        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+        return df
+    except requests.exceptions.RequestException:
+        return pd.DataFrame()
 
 st.title("📈 DI.se Trading Dashboard")
 
 df = load_data()
 
+if df.empty:
+    st.warning("No data available. Please check API connection.")
+    st.stop()
+
 # Sidebar
 stocks = sorted(df["name"].unique())
 selected = st.sidebar.selectbox("Select stock", stocks)
-df_stock = df[df["name"] == selected].sort_values("timestamp")
+
+# Load full history for selected stock
+days = st.sidebar.slider("Days of history", 7, 90, 30)
+df_stock = load_stock_history(selected, days=days)
+
+if df_stock.empty:
+    st.warning(f"No historical data for {selected}")
+    df_stock = df[df["name"] == selected].sort_values("timestamp")
+
 compare_mode = st.sidebar.checkbox("Compare multiple stocks")
 
 

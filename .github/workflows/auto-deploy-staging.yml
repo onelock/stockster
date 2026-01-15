@@ -144,6 +144,7 @@ jobs:
           echo "Waiting for rollout..."
           kubectl rollout status deployment/stockster-dashboard -n $NAMESPACE --timeout=5m
           kubectl rollout status deployment/stockster-api -n $NAMESPACE --timeout=5m
+          kubectl rollout status deployment/stockster-scraper -n $NAMESPACE --timeout=5m
           
           echo "✓ Deployed successfully!"
       
