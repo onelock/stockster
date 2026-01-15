@@ -120,13 +120,13 @@ jobs:
           SHA_TAG="main-$(git rev-parse --short HEAD)"
           # Use Kustomize to set the new images instead of sed
           if [ "${{ needs.detect-changes.outputs.api }}" == "true" ]; then
-            kustomize edit set image api=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-api:$SHA_TAG
+            kustomize edit set image stockster/api=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-api:$SHA_TAG
           fi
           if [ "${{ needs.detect-changes.outputs.dashboard }}" == "true" ]; then
-            kustomize edit set image dashboard=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard:$SHA_TAG
+            kustomize edit set image stockster/dashboard=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard:$SHA_TAG
           fi
           if [ "${{ needs.detect-changes.outputs.scraper }}" == "true" ]; then
-            kustomize edit set image scraper=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:$SHA_TAG
+            kustomize edit set image stockster/scraper=${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:$SHA_TAG
           fi
 
       - name: Apply and Wait
