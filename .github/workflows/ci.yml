@@ -101,7 +101,7 @@ jobs:
         id: meta-dashboard
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/stockster-dashboard
           tags: |
             type=ref,event=branch
             type=ref,event=pr
