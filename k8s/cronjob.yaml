@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: stockster-scraper
 spec:
-  # Every 15 minutes during market hours (9:00-17:30 CET, Mon-Fri)
+  # Every 15 minutes during market hours (9:00-17:30 CET, Mon-Fri) evn on holidays
   schedule: "*/15 9-17 * * 1-5"
   # timezone: "Europe/Stockholm"  # Requires Kubernetes 1.25+
   successfulJobsHistoryLimit: 3
