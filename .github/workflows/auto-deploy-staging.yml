@@ -43,7 +43,7 @@ jobs:
           file: ./Dockerfile.scraper
           push: true
           tags: |
-            ghcr.io/onelock/stockster-scraper:main-${{ steps.sha.outputs.short }}
+            ghcr.io/onelock/stockster-scraper:-${{ steps.sha.outputs.short }}
             ghcr.io/onelock/stockster-scraper:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -55,7 +55,7 @@ jobs:
           file: ./Dockerfile.dashboard
           push: true
           tags: |
-            ghcr.io/onelock/stockster-dashboard:main-${{ steps.sha.outputs.short }}
+            ghcr.io/onelock/stockster-dashboard:-${{ steps.sha.outputs.short }}
             ghcr.io/onelock/stockster-dashboard:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -106,7 +106,7 @@ jobs:
       
       - name: Deploy to staging
         run: |
-          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
+          IMAGE_TAG="-${{ steps.sha.outputs.short }}"
           NAMESPACE="stockster"
           
           echo "Deploying version $IMAGE_TAG..."
@@ -130,7 +130,7 @@ jobs:
       
       - name: Create deployment summary
         run: |
-          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
+          IMAGE_TAG="-${{ steps.sha.outputs.short }}"
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment**: Production (stockster)" >> $GITHUB_STEP_SUMMARY
