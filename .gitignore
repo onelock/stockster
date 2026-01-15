@@ -164,7 +164,7 @@ tttt.yml
 
 
 # local scripts
-build-and-push.sh
+build-and-push.*
 deploy.sh
 run_scraper.sh
 rollback.sh
