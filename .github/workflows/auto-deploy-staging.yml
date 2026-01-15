@@ -43,7 +43,7 @@ jobs:
           file: ./Dockerfile.scraper
           push: true
           tags: |
-            ghcr.io/onelock/stockster-scraper:-${{ steps.sha.outputs.short }}
+            ghcr.io/onelock/stockster-scraper:main-${{ steps.sha.outputs.short }}
             ghcr.io/onelock/stockster-scraper:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -55,8 +55,20 @@ jobs:
           file: ./Dockerfile.dashboard
           push: true
           tags: |
-            ghcr.io/onelock/stockster-dashboard:-${{ steps.sha.outputs.short }}
+            ghcr.io/onelock/stockster-dashboard:main-${{ steps.sha.outputs.short }}
             ghcr.io/onelock/stockster-dashboard:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.api
+          push: true
+          tags: |
+            ghcr.io/onelock/stockster-api:main-${{ steps.sha.outputs.short }}
+            ghcr.io/onelock/stockster-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -106,7 +118,7 @@ jobs:
       
       - name: Deploy to staging
         run: |
-          IMAGE_TAG="-${{ steps.sha.outputs.short }}"
+          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           NAMESPACE="stockster"
           
           echo "Deploying version $IMAGE_TAG..."
@@ -114,6 +126,12 @@ jobs:
           # Update dashboard
           kubectl set image deployment/stockster-dashboard \
             dashboard=ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG \
+            -n $NAMESPACE \
+            --record
+          
+          # Update API
+          kubectl set image deployment/stockster-api \
+            api=ghcr.io/onelock/stockster-api:$IMAGE_TAG \
             -n $NAMESPACE \
             --record
           
@@ -125,12 +143,13 @@ jobs:
           
           echo "Waiting for rollout..."
           kubectl rollout status deployment/stockster-dashboard -n $NAMESPACE --timeout=5m
+          kubectl rollout status deployment/stockster-api -n $NAMESPACE --timeout=5m
           
           echo "✓ Deployed successfully!"
       
       - name: Create deployment summary
         run: |
-          IMAGE_TAG="-${{ steps.sha.outputs.short }}"
+          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Environment**: Production (stockster)" >> $GITHUB_STEP_SUMMARY
@@ -141,9 +160,11 @@ jobs:
           echo "### Images Published" >> $GITHUB_STEP_SUMMARY
           echo "- \`ghcr.io/onelock/stockster-scraper:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
           echo "- \`ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/onelock/stockster-api:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployed Resources" >> $GITHUB_STEP_SUMMARY
           echo "- PostgreSQL Database" >> $GITHUB_STEP_SUMMARY
+          echo "- REST API (2 replicas)" >> $GITHUB_STEP_SUMMARY
           echo "- Dashboard (2 replicas)" >> $GITHUB_STEP_SUMMARY
           echo "- Scraper CronJob (every 15min)" >> $GITHUB_STEP_SUMMARY
 

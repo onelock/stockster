@@ -161,3 +161,11 @@ Pipfile.lock
 k3s.yaml
 k3s.secret
 tttt.yml
+
+
+# local scripts
+build-and-push.sh
+deploy.sh
+run_scraper.sh
+rollback.sh
+load-github-token.sh
