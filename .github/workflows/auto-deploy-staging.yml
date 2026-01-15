@@ -43,8 +43,8 @@ jobs:
           file: ./Dockerfile.scraper
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:main-${{ steps.sha.outputs.short }}
-            ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:latest
+            ghcr.io/onelock/stockster-scraper:main-${{ steps.sha.outputs.short }}
+            ghcr.io/onelock/stockster-scraper:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -55,8 +55,8 @@ jobs:
           file: ./Dockerfile.dashboard
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard:main-${{ steps.sha.outputs.short }}
-            ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard:latest
+            ghcr.io/onelock/stockster-dashboard:main-${{ steps.sha.outputs.short }}
+            ghcr.io/onelock/stockster-dashboard:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -108,19 +108,18 @@ jobs:
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           NAMESPACE="stockster"
-          REGISTRY="${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}"
           
           echo "Deploying version $IMAGE_TAG..."
           
           # Update dashboard
           kubectl set image deployment/stockster-dashboard \
-            dashboard=$REGISTRY/stockster-dashboard:$IMAGE_TAG \
+            dashboard=ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG \
             -n $NAMESPACE \
             --record
           
           # Update scraper cronjob
           kubectl set image cronjob/stockster-scraper \
-            scraper=$REGISTRY/stockster-scraper:$IMAGE_TAG \
+            scraper=ghcr.io/onelock/stockster-scraper:$IMAGE_TAG \
             -n $NAMESPACE \
             --record
           
@@ -140,8 +139,8 @@ jobs:
           echo "- **Author**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Images Published" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-dashboard:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/onelock/stockster-scraper:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployed Resources" >> $GITHUB_STEP_SUMMARY
           echo "- PostgreSQL Database" >> $GITHUB_STEP_SUMMARY
