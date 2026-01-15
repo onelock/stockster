@@ -159,3 +159,4 @@ Pipfile.lock
 
 # config
 k3s.yaml
+k3s.secret
