@@ -5,8 +5,8 @@ metadata:
   namespace: stockster
 spec:
   accessModes:
-    - ReadWriteMany  # Shared between scraper and dashboard
+    - ReadWriteOnce  # local-path only supports RWO
   resources:
     requests:
       storage: 5Gi
-  storageClassName: standard  # Adjust based on your cluster
+  storageClassName: local-path  # K3s default storage class
