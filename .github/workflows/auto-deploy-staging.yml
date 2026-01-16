@@ -103,11 +103,6 @@ jobs:
       - name: Build summary
         run: |
           echo "📦 Build Plan:"
-          if [ "${{ steps.changes.outputs.build_scraper }}" == "true" ]; then
-            echo "  ✅ Scraper will be built"
-          else
-            echo "  ⏭️  Scraper will be skipped"
-          fi
           if [ "${{ steps.changes.outputs.build_dashboard }}" == "true" ]; then
             echo "  ✅ Dashboard will be built"
           else
@@ -118,19 +113,6 @@ jobs:
           else
             echo "  ⏭️  API will be skipped"
           fi
-      
-      - name: Build and push scraper
-        if: steps.changes.outputs.build_scraper == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.scraper
-          push: true
-          tags: |
-            ghcr.io/onelock/stockster-scraper:main-${{ steps.sha.outputs.short }}
-            ghcr.io/onelock/stockster-scraper:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
       
       - name: Build and push dashboard
         if: steps.changes.outputs.build_dashboard == 'true'
@@ -206,11 +188,6 @@ jobs:
           cd k8s
           
           # Update image tags in kustomization.yaml for components that changed
-          if [ "${{ steps.changes.outputs.build_scraper }}" == "true" ]; then
-            echo "✓ Updating scraper tag to $IMAGE_TAG"
-            yq eval -i '(.images[] | select(.name == "stockster/scraper") | .newTag) = "'$IMAGE_TAG'"' kustomization.yaml
-          fi
-          
           if [ "${{ steps.changes.outputs.build_dashboard }}" == "true" ]; then
             echo "✓ Updating dashboard tag to $IMAGE_TAG"
             yq eval -i '(.images[] | select(.name == "stockster/dashboard") | .newTag) = "'$IMAGE_TAG'"' kustomization.yaml
@@ -226,7 +203,7 @@ jobs:
           cat kustomization.yaml
       
       - name: Deploy to staging
-        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true' || steps.changes.outputs.deploy_manifests == 'true'
+        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.deploy_manifests == 'true'
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           NAMESPACE="stockster"
@@ -255,7 +232,7 @@ jobs:
           echo "✅ Deployment completed successfully!"
       
       - name: Create deployment summary
-        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true' || steps.changes.outputs.deploy_manifests == 'true'
+        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.deploy_manifests == 'true'
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
