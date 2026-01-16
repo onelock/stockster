@@ -1,3 +1,4 @@
+"""Technical indicators for stock analysis"""
 import pandas as pd
 
 def add_indicators(df):

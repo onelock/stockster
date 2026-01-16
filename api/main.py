@@ -1,6 +1,7 @@
 """
 FastAPI service for accessing stock data from PostgreSQL database
 """
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
