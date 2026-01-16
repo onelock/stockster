@@ -1,3 +1,4 @@
+"""DI Stock Scraper - Fetches stock data from di.se"""
 from playwright.sync_api import sync_playwright
 import datetime
 import os
