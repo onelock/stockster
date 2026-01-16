@@ -2,10 +2,11 @@
 from playwright.sync_api import sync_playwright
 import datetime
 import os
+import csv
 from data_utils import clean_number, clean_integer
-from db_utils import init_db, get_db_connection
 
 DEBUG = 0
+CSV_OUTPUT_DIR = os.getenv('CSV_OUTPUT_DIR', '/data')
 
 def scrape_disestockdata():
     with sync_playwright() as p:
@@ -83,83 +84,94 @@ def scrape_disestockdata():
         # print(f"\nExtracted {len(extracted)} stocks with all metrics")
 
     timestamp = datetime.datetime.now().isoformat(timespec="seconds")
-
-    conn, db_type = get_db_connection()
-    cursor = conn.cursor()
     
-    # Prepare parameter placeholder based on db type
-    param = '%s' if db_type == 'postgresql' else '?'
+    # Ensure output directory exists
+    os.makedirs(CSV_OUTPUT_DIR, exist_ok=True)
     
-    for stock_index, stock in enumerate(extracted):
+    # Prepare data for CSV export
+    trading_data = []
+    historical_data = []
+    metrics_data = []
+    
+    for stock in extracted:
         href = stock['href']
         
-        # Debug: # print what data we have for first stock
-        if DEBUG:
-            if stock_index == 0:
-                print(f"  Trading (table_0): {stock['trading'][:3]} length: {len(stock['trading']) if stock['trading'] else None}")
-                print(f"  Historical (table_1): {stock['historical'][:3]} length: {len(stock['historical']) if stock['historical'] else None}")
-                print(f"  Metrics (table_2): {stock['metrics'][:3]} length: {len(stock['metrics']) if stock['metrics'] else None}")
-        
-        # Insert trading data
+        # Prepare trading data
         if stock['trading'] and len(stock['trading']) >= 8:
             t = stock['trading']
-            cursor.execute(f"""
-                INSERT INTO stocks_trading 
-                (timestamp, name, last_price, change_abs, change_pct, highest, lowest, volume, market_value, href)
-                VALUES ({param}, {param}, {param}, {param}, {param}, {param}, {param}, {param}, {param}, {param})
-            """, (
-                timestamp, 
-                t[0],  # name
-                clean_number(t[1]),  # last_price
-                clean_number(t[2]),  # change_abs
-                clean_number(t[3]),  # change_pct
-                clean_number(t[4]),  # highest
-                clean_number(t[5]),  # lowest
-                clean_integer(t[6]),  # volume
-                clean_integer(t[7]),  # market_value
-                href
-            ))
+            trading_data.append({
+                'timestamp': timestamp,
+                'name': t[0],
+                'last_price': clean_number(t[1]),
+                'change_abs': clean_number(t[2]),
+                'change_pct': clean_number(t[3]),
+                'highest': clean_number(t[4]),
+                'lowest': clean_number(t[5]),
+                'volume': clean_integer(t[6]),
+                'market_value': clean_integer(t[7]),
+                'href': href
+            })
         
-        # Insert historical data
+        # Prepare historical data
         if stock['historical'] and len(stock['historical']) >= 7:
             h = stock['historical']
-            cursor.execute(f"""
-                INSERT INTO stocks_historical
-                (timestamp, name, year_high, date_year_high, change_1d, change_1m, change_in_y, change_1y)
-                VALUES ({param}, {param}, {param}, {param}, {param}, {param}, {param}, {param})
-            """, (
-                timestamp,
-                h[0],  # name
-                clean_number(h[1]),  # year_high
-                h[2],  # date_year_high
-                clean_number(h[3]),  # change_1d
-                clean_number(h[4]),  # change_1m
-                clean_number(h[5]),  # change_in_y
-                clean_number(h[6])   # change_1y
-            ))
+            historical_data.append({
+                'timestamp': timestamp,
+                'name': h[0],
+                'year_high': clean_number(h[1]),
+                'date_year_high': h[2],
+                'change_1d': clean_number(h[3]),
+                'change_1m': clean_number(h[4]),
+                'change_in_y': clean_number(h[5]),
+                'change_1y': clean_number(h[6])
+            })
         
-        # Insert metrics data
+        # Prepare metrics data
         if stock['metrics'] and len(stock['metrics']) >= 7:
             m = stock['metrics']
-            cursor.execute(f"""
-                INSERT INTO stocks_metrics
-                (timestamp, name, pe_ratio, ps_ratio, earning_per_share, equity_per_share, dividend_yield, direct_return)
-                VALUES ({param}, {param}, {param}, {param}, {param}, {param}, {param}, {param})
-            """, (
-                timestamp,
-                m[0],  # name
-                clean_number(m[1]),  # pe_ratio
-                clean_number(m[2]),  # ps_ratio
-                clean_number(m[3]),  # earning_per_share
-                clean_number(m[4]),  # equity_per_share
-                clean_number(m[5]),  # dividend_yield
-                clean_number(m[6])   # direct_return
-            ))
-
-    conn.commit()
-    conn.close()
-    # print(f"Data inserted into 3 separate tables")
+            metrics_data.append({
+                'timestamp': timestamp,
+                'name': m[0],
+                'pe_ratio': clean_number(m[1]),
+                'ps_ratio': clean_number(m[2]),
+                'earning_per_share': clean_number(m[3]),
+                'equity_per_share': clean_number(m[4]),
+                'dividend_yield': clean_number(m[5]),
+                'direct_return': clean_number(m[6])
+            })
+    
+    # Write or append to trading CSV
+    if trading_data:
+        csv_file = os.path.join(CSV_OUTPUT_DIR, 'stocks_trading.csv')
+        file_exists = os.path.isfile(csv_file)
+        with open(csv_file, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=trading_data[0].keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerows(trading_data)
+        print(f"{'Appended' if file_exists else 'Created'} {len(trading_data)} trading records to {csv_file}")
+    
+    # Write or append to historical CSV
+    if historical_data:
+        csv_file = os.path.join(CSV_OUTPUT_DIR, 'stocks_historical.csv')
+        file_exists = os.path.isfile(csv_file)
+        with open(csv_file, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=historical_data[0].keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerows(historical_data)
+        print(f"{'Appended' if file_exists else 'Created'} {len(historical_data)} historical records to {csv_file}")
+    
+    # Write or append to metrics CSV
+    if metrics_data:
+        csv_file = os.path.join(CSV_OUTPUT_DIR, 'stocks_metrics.csv')
+        file_exists = os.path.isfile(csv_file)
+        with open(csv_file, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=metrics_data[0].keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerows(metrics_data)
+        print(f"{'Appended' if file_exists else 'Created'} {len(metrics_data)} metrics records to {csv_file}")
 
 if __name__ == "__main__":
-    init_db()
     scrape_disestockdata()
