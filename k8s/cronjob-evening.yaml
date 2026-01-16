@@ -1,0 +1,68 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: stockster-scraper-evening
+spec:
+  # Every 15 minutes during evening hours (17:00-17:30 CET, Mon-Fri)
+  schedule: "0,15,30 17 * * 1-5"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid  # Prevent overlapping runs
+  
+  jobTemplate:
+    spec:
+      backoffLimit: 2  # Retry twice on failure
+      activeDeadlineSeconds: 600  # 10 minute timeout
+      
+      template:
+        metadata:
+          labels:
+            app: stockster-scraper-evening
+        spec:
+          restartPolicy: OnFailure  # Retry failed containers
+          
+          imagePullSecrets:
+          - name: ghcr-secret
+          
+          containers:
+          - name: scraper
+            image: mcr.microsoft.com/playwright/python:v1.57.0-jammy
+            imagePullPolicy: IfNotPresent
+            
+            command: 
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Installing Playwright..."
+              pip install playwright
+              echo "Installing Chromium browser..."
+              python3 -m playwright install chromium
+              echo "Running scraper..."
+              python3 /app/scrape_di.py
+            
+            env:
+            - name: CSV_OUTPUT_DIR
+              value: "/data"
+            
+            volumeMounts:
+            - name: stockster-data
+              mountPath: /data
+            - name: scraper-code
+              mountPath: /app
+            
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "200m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+          
+          volumes:
+          - name: stockster-data
+            persistentVolumeClaim:
+              claimName: stockster-data-pvc
+          - name: scraper-code
+            configMap:
+              name: scraper-code

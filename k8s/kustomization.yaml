@@ -10,6 +10,7 @@ resources:
   - dashboard-deployment.yaml
   - api-deployment.yaml
   - cronjob.yaml
+  - cronjob-evening.yaml
   - scraper-configmap.yaml
 
 images:
