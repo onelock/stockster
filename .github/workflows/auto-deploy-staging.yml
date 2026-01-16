@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -41,12 +43,13 @@ jobs:
         run: |
           # Get list of changed files
           if [ "${{ github.event_name }}" == "push" ]; then
-            if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
-              # First push to branch - build all
+            # Check if we can access the before commit
+            if ! git cat-file -e ${{ github.event.before }} 2>/dev/null; then
+              # Before commit not available - build all
               echo "build_scraper=true" >> $GITHUB_OUTPUT
               echo "build_dashboard=true" >> $GITHUB_OUTPUT
               echo "build_api=true" >> $GITHUB_OUTPUT
-              echo "First push - building all components"
+              echo "⚠️ Previous commit not available - building all components"
             else
               CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
               echo "Changed files:"
@@ -55,28 +58,28 @@ jobs:
               # Check if scraper needs rebuild
               if echo "$CHANGED_FILES" | grep -qE '^(di_scraper/|Dockerfile\.scraper|requirements\.txt)'; then
                 echo "build_scraper=true" >> $GITHUB_OUTPUT
-                echo "Scraper changes detected"
+                echo "✓ Scraper changes detected"
               else
                 echo "build_scraper=false" >> $GITHUB_OUTPUT
-                echo "No scraper changes"
+                echo "✗ No scraper changes"
               fi
               
               # Check if dashboard needs rebuild
               if echo "$CHANGED_FILES" | grep -qE '^(dashboard/|Dockerfile\.dashboard|requirements\.txt)'; then
                 echo "build_dashboard=true" >> $GITHUB_OUTPUT
-                echo "Dashboard changes detected"
+                echo "✓ Dashboard changes detected"
               else
                 echo "build_dashboard=false" >> $GITHUB_OUTPUT
-                echo "No dashboard changes"
+                echo "✗ No dashboard changes"
               fi
               
               # Check if API needs rebuild
               if echo "$CHANGED_FILES" | grep -qE '^(api/|Dockerfile\.api|requirements\.txt)'; then
                 echo "build_api=true" >> $GITHUB_OUTPUT
-                echo "API changes detected"
+                echo "✓ API changes detected"
               else
                 echo "build_api=false" >> $GITHUB_OUTPUT
-                echo "No API changes"
+                echo "✗ No API changes"
               fi
               
               # Check if analysis module changed (affects all components)
@@ -84,7 +87,7 @@ jobs:
                 echo "build_scraper=true" >> $GITHUB_OUTPUT
                 echo "build_dashboard=true" >> $GITHUB_OUTPUT
                 echo "build_api=true" >> $GITHUB_OUTPUT
-                echo "Analysis module changed - rebuilding all components"
+                echo "✓ Analysis module changed - rebuilding all components"
               fi
             fi
           fi
