@@ -30,7 +30,7 @@ spec:
             image: stockster/scraper
             imagePullPolicy: Always
             
-            command: ["python3", "di_scraper/scrape_di.py"]
+            command: ["python3", "/app/scrape_di.py"]
             
             env:
             - name: CSV_OUTPUT_DIR
@@ -39,6 +39,8 @@ spec:
             volumeMounts:
             - name: stockster-data
               mountPath: /data
+            - name: scraper-code
+              mountPath: /app
             
             resources:
               requests:
@@ -52,3 +54,6 @@ spec:
           - name: stockster-data
             persistentVolumeClaim:
               claimName: stockster-data-pvc
+          - name: scraper-code
+            configMap:
+              name: scraper-code

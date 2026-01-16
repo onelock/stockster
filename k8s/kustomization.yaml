@@ -10,6 +10,7 @@ resources:
   - dashboard-deployment.yaml
   - api-deployment.yaml
   - cronjob.yaml
+  - scraper-configmap.yaml
 
 images:
   - name: stockster/scraper

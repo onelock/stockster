@@ -89,6 +89,14 @@ jobs:
                 echo "build_api=true" >> $GITHUB_OUTPUT
                 echo "✓ Analysis module changed - rebuilding all components"
               fi
+              
+              # Check if Kubernetes manifests changed (requires deployment)
+              if echo "$CHANGED_FILES" | grep -qE '^k8s/'; then
+                echo "deploy_manifests=true" >> $GITHUB_OUTPUT
+                echo "✓ Kubernetes manifests changed - will deploy"
+              else
+                echo "deploy_manifests=false" >> $GITHUB_OUTPUT
+              fi
             fi
           fi
       
@@ -218,7 +226,7 @@ jobs:
           cat kustomization.yaml
       
       - name: Deploy to staging
-        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true'
+        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true' || steps.changes.outputs.deploy_manifests == 'true'
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           NAMESPACE="stockster"
@@ -247,7 +255,7 @@ jobs:
           echo "✅ Deployment completed successfully!"
       
       - name: Create deployment summary
-        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true'
+        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true' || steps.changes.outputs.deploy_manifests == 'true'
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
