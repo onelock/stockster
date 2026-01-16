@@ -27,10 +27,15 @@ spec:
           
           containers:
           - name: scraper
-            image: stockster/scraper
-            imagePullPolicy: Always
+            image: mcr.microsoft.com/playwright/python:v1.40.0-jammy
+            imagePullPolicy: IfNotPresent
             
-            command: ["python3", "/app/scrape_di.py"]
+            command: 
+            - /bin/bash
+            - -c
+            - |
+              playwright install chromium
+              python3 /app/scrape_di.py
             
             env:
             - name: CSV_OUTPUT_DIR

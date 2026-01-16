@@ -15,7 +15,7 @@ resources:
 images:
   - name: stockster/scraper
     newName: ghcr.io/onelock/stockster-scraper
-    newTag: latest
+    newTag: main-087e618
   - name: stockster/dashboard
     newName: ghcr.io/onelock/stockster-dashboard
     newTag: latest
