@@ -63,7 +63,9 @@ jobs:
           context: .
           file: ./Dockerfile.api
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-api:${{ env.SHA_TAG }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-api:main-${{ env.SHA_TAG }}
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-api:latest
 
       - name: Build and Push Dashboard
         if: ${{ needs.detect-changes.outputs.dashboard == 'true' }}
@@ -81,7 +83,8 @@ jobs:
           context: .
           file: ./Dockerfile.scraper
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:${{ env.SHA_TAG }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_OWNER_LC }}/stockster-scraper:${{ env.SHA_TAG }}
 
   # STEP 3: Update and Deploy
   deploy:
