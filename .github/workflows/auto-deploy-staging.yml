@@ -92,6 +92,25 @@ jobs:
             fi
           fi
       
+      - name: Build summary
+        run: |
+          echo "📦 Build Plan:"
+          if [ "${{ steps.changes.outputs.build_scraper }}" == "true" ]; then
+            echo "  ✅ Scraper will be built"
+          else
+            echo "  ⏭️  Scraper will be skipped"
+          fi
+          if [ "${{ steps.changes.outputs.build_dashboard }}" == "true" ]; then
+            echo "  ✅ Dashboard will be built"
+          else
+            echo "  ⏭️  Dashboard will be skipped"
+          fi
+          if [ "${{ steps.changes.outputs.build_api }}" == "true" ]; then
+            echo "  ✅ API will be built"
+          else
+            echo "  ⏭️  API will be skipped"
+          fi
+      
       - name: Build and push scraper
         if: steps.changes.outputs.build_scraper == 'true'
         uses: docker/build-push-action@v5
@@ -136,6 +155,11 @@ jobs:
         with:
           version: 'latest'
       
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      
       - name: Configure kubectl
         run: |
           mkdir -p $HOME/.kube
@@ -166,66 +190,64 @@ jobs:
             --namespace=stockster \
             --dry-run=client -o yaml | kubectl apply -f -
       
-      - name: Deploy all resources
+      - name: Update kustomization with new tags
+        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true'
         run: |
-          kubectl apply -k k8s/
+          IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           
-          echo "Waiting for PostgreSQL to be ready..."
-          kubectl wait --for=condition=ready pod -l app=postgres -n stockster --timeout=5m || true
+          cd k8s
           
-          echo "✓ Infrastructure deployed successfully!"
+          # Update image tags in kustomization.yaml for components that changed
+          if [ "${{ steps.changes.outputs.build_scraper }}" == "true" ]; then
+            echo "✓ Updating scraper tag to $IMAGE_TAG"
+            yq eval -i '(.images[] | select(.name == "stockster/scraper") | .newTag) = "'$IMAGE_TAG'"' kustomization.yaml
+          fi
+          
+          if [ "${{ steps.changes.outputs.build_dashboard }}" == "true" ]; then
+            echo "✓ Updating dashboard tag to $IMAGE_TAG"
+            yq eval -i '(.images[] | select(.name == "stockster/dashboard") | .newTag) = "'$IMAGE_TAG'"' kustomization.yaml
+          fi
+          
+          if [ "${{ steps.changes.outputs.build_api }}" == "true" ]; then
+            echo "✓ Updating API tag to $IMAGE_TAG"
+            yq eval -i '(.images[] | select(.name == "stockster/api") | .newTag) = "'$IMAGE_TAG'"' kustomization.yaml
+          fi
+          
+          echo ""
+          echo "Updated kustomization.yaml:"
+          cat kustomization.yaml
       
       - name: Deploy to staging
+        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true'
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           NAMESPACE="stockster"
           
-          echo "Deploying version $IMAGE_TAG..."
+          echo "Deploying changes via Kustomize..."
           
-          # Update dashboard (only if changed)
+          # Apply all resources with updated images
+          kubectl apply -k k8s/
+          
+          echo ""
+          echo "Waiting for PostgreSQL to be ready..."
+          kubectl wait --for=condition=ready pod -l app=postgres -n $NAMESPACE --timeout=5m || true
+          
+          echo ""
+          echo "Waiting for application rollout to complete..."
           if [ "${{ steps.changes.outputs.build_dashboard }}" == "true" ]; then
-            echo "Updating dashboard..."
-            kubectl set image deployment/stockster-dashboard \
-              dashboard=ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG \
-              -n $NAMESPACE \
-              --record
-          else
-            echo "Skipping dashboard (no changes)"
-          fi
-          
-          # Update API (only if changed)
-          if [ "${{ steps.changes.outputs.build_api }}" == "true" ]; then
-            echo "Updating API..."
-            kubectl set image deployment/stockster-api \
-              api=ghcr.io/onelock/stockster-api:$IMAGE_TAG \
-              -n $NAMESPACE \
-              --record
-          else
-            echo "Skipping API (no changes)"
-          fi
-          
-          # Update scraper cronjob (only if changed)
-          if [ "${{ steps.changes.outputs.build_scraper }}" == "true" ]; then
-            echo "Updating scraper..."
-            kubectl set image cronjob/stockster-scraper \
-              scraper=ghcr.io/onelock/stockster-scraper:$IMAGE_TAG \
-              -n $NAMESPACE \
-              --record
-          else
-            echo "Skipping scraper (no changes)"
-          fi
-          
-          echo "Waiting for rollout..."
-          if [ "${{ steps.changes.outputs.build_dashboard }}" == "true" ]; then
+            echo "Checking dashboard rollout..."
             kubectl rollout status deployment/stockster-dashboard -n $NAMESPACE --timeout=5m
           fi
           if [ "${{ steps.changes.outputs.build_api }}" == "true" ]; then
+            echo "Checking API rollout..."
             kubectl rollout status deployment/stockster-api -n $NAMESPACE --timeout=5m
           fi
           
-          echo "✓ Deployed successfully!"
+          echo ""
+          echo "✅ Deployment completed successfully!"
       
       - name: Create deployment summary
+        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true'
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
