@@ -46,7 +46,6 @@ jobs:
             # Check if we can access the before commit
             if ! git cat-file -e ${{ github.event.before }} 2>/dev/null; then
               # Before commit not available - build all
-              echo "build_scraper=true" >> $GITHUB_OUTPUT
               echo "build_dashboard=true" >> $GITHUB_OUTPUT
               echo "build_api=true" >> $GITHUB_OUTPUT
               echo "⚠️ Previous commit not available - building all components"
@@ -54,15 +53,6 @@ jobs:
               CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
               echo "Changed files:"
               echo "$CHANGED_FILES"
-              
-              # Check if scraper needs rebuild
-              if echo "$CHANGED_FILES" | grep -qE '^(di_scraper/|Dockerfile\.scraper|requirements\.txt)'; then
-                echo "build_scraper=true" >> $GITHUB_OUTPUT
-                echo "✓ Scraper changes detected"
-              else
-                echo "build_scraper=false" >> $GITHUB_OUTPUT
-                echo "✗ No scraper changes"
-              fi
               
               # Check if dashboard needs rebuild
               if echo "$CHANGED_FILES" | grep -qE '^(dashboard/|Dockerfile\.dashboard|requirements\.txt)'; then
@@ -82,12 +72,11 @@ jobs:
                 echo "✗ No API changes"
               fi
               
-              # Check if analysis module changed (affects all components)
+              # Check if analysis module changed (affects dashboard and API)
               if echo "$CHANGED_FILES" | grep -qE '^analysis/'; then
-                echo "build_scraper=true" >> $GITHUB_OUTPUT
                 echo "build_dashboard=true" >> $GITHUB_OUTPUT
                 echo "build_api=true" >> $GITHUB_OUTPUT
-                echo "✓ Analysis module changed - rebuilding all components"
+                echo "✓ Analysis module changed - rebuilding dashboard and API"
               fi
               
               # Check if Kubernetes manifests changed (requires deployment)
@@ -181,7 +170,7 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
       
       - name: Update kustomization with new tags
-        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true' || steps.changes.outputs.build_scraper == 'true'
+        if: steps.changes.outputs.build_dashboard == 'true' || steps.changes.outputs.build_api == 'true'
         run: |
           IMAGE_TAG="main-${{ steps.sha.outputs.short }}"
           
@@ -243,11 +232,6 @@ jobs:
           echo "- **Author**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Images Built & Published" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.changes.outputs.build_scraper }}" == "true" ]; then
-            echo "- ✅ \`ghcr.io/onelock/stockster-scraper:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- ⏭️ stockster-scraper (no changes)" >> $GITHUB_STEP_SUMMARY
-          fi
           if [ "${{ steps.changes.outputs.build_dashboard }}" == "true" ]; then
             echo "- ✅ \`ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
           else
@@ -263,4 +247,4 @@ jobs:
           echo "- PostgreSQL Database" >> $GITHUB_STEP_SUMMARY
           echo "- REST API (2 replicas)" >> $GITHUB_STEP_SUMMARY
           echo "- Dashboard (2 replicas)" >> $GITHUB_STEP_SUMMARY
-          echo "- Scraper CronJob (every 15min)" >> $GITHUB_STEP_SUMMARY
+          echo "- Scraper CronJob (Playwright public image + ConfigMap)" >> $GITHUB_STEP_SUMMARY
