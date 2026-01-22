@@ -170,3 +170,4 @@ run_scraper.sh
 rollback.sh
 load-github-token.sh
 start_api.sh
+*.sh
