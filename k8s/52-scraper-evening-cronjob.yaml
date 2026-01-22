@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: stockster-scraper
+  namespace: stockster
+spec:
+  # Every Mon-Fri 17 :00 UTC (18:00 CET)
+  schedule: "05 17 * * 1-5"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid  # Prevent overlapping runs
+  
+  jobTemplate:
+    spec:
+      backoffLimit: 2  # Retry twice on failure
+      activeDeadlineSeconds: 240  # 4 minute timeout (much faster without installations)
+      
+      template:
+        metadata:
+          labels:
+            app: stockster-scraper
+        spec:
+          restartPolicy: OnFailure  # Retry failed containers
+          
+          # imagePullSecrets:
+          # - name: ghcr-secret
+          
+          containers:
+          - name: scraper
+            image: ghcr.io/onelock/stockster-scraper:latest
+            imagePullPolicy: IfNotPresent
+            
+            command: ["python", "/app/scrape_di.py"]
+            
+            volumeMounts:
+            - name: stockster-data
+              mountPath: /data
+            - name: scraper-code
+              mountPath: /app
+            
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "500m"
+              limits:
+                memory: "1Gi"
+                cpu: "1000m"
+          
+          volumes:
+          - name: stockster-data
+            persistentVolumeClaim:
+              claimName: stockster-data-pvc
+          - name: scraper-code
+            configMap:
+              name: scraper-code
+              defaultMode: 0777

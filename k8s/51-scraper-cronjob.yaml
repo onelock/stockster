@@ -2,18 +2,18 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: stockster-scraper
+  namespace: stockster
 spec:
-  # Every 15 minutes during market hours (9:00-17:30 CET, Mon-Fri) evn on holidays
-  schedule: "*/15 9-17 * * 1-5"
-  # timezone: "Europe/Stockholm"  # Requires Kubernetes 1.25+
+  # Every 15 minutes during market hours (9:00-17:30 CET = 8:00-16:30 UTC, Mon-Fri)
+  schedule: "*/15 8-16 * * 1-5"
   successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
   concurrencyPolicy: Forbid  # Prevent overlapping runs
   
   jobTemplate:
     spec:
       backoffLimit: 2  # Retry twice on failure
-      activeDeadlineSeconds: 600  # 10 minute timeout
+      activeDeadlineSeconds: 240  # 4 minute timeout (much faster without installations)
       
       template:
         metadata:
@@ -22,29 +22,15 @@ spec:
         spec:
           restartPolicy: OnFailure  # Retry failed containers
           
-          imagePullSecrets:
-          - name: ghcr-secret
+          # imagePullSecrets:
+          # - name: ghcr-secret
           
           containers:
           - name: scraper
-            image: mcr.microsoft.com/playwright/python:v1.57.0-jammy
+            image: ghcr.io/onelock/stockster-scraper:latest
             imagePullPolicy: IfNotPresent
             
-            command: 
-            - /bin/bash
-            - -c
-            - |
-              set -e
-              echo "Installing Playwright..."
-              pip install playwright
-              echo "Installing Chromium browser..."
-              python3 -m playwright install chromium
-              echo "Running scraper..."
-              python3 /app/scrape_di.py
-            
-            env:
-            - name: CSV_OUTPUT_DIR
-              value: "/data"
+            command: ["python", "/app/scrape_di.py"]
             
             volumeMounts:
             - name: stockster-data
@@ -54,11 +40,11 @@ spec:
             
             resources:
               requests:
-                memory: "256Mi"
-                cpu: "200m"
-              limits:
                 memory: "512Mi"
                 cpu: "500m"
+              limits:
+                memory: "1Gi"
+                cpu: "1000m"
           
           volumes:
           - name: stockster-data
@@ -67,3 +53,4 @@ spec:
           - name: scraper-code
             configMap:
               name: scraper-code
+              defaultMode: 0777

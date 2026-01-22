@@ -26,6 +26,15 @@ spec:
       labels:
         app: postgres
     spec:
+      # 1. Allow Postgres time to save data on shutdown
+      terminationGracePeriodSeconds: 120
+
+      # 2. Fix volume permission issues
+      securityContext:
+        fsGroup: 999 # Standard Postgres UID
+        runAsUser: 999
+        runAsNonRoot: true
+
       containers:
       - name: postgres
         image: postgres:16-alpine
@@ -33,33 +42,23 @@ spec:
         - containerPort: 5432
           name: postgres
         
-        env:
-        - name: POSTGRES_DB
-          value: stockster
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: username
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: password
-        - name: PGDATA
-          value: /var/lib/postgresql/data/pgdata
-        
+        envFrom:
+        - configMapRef: 
+          name: postgres-db-config 
+        - secretRef:
+            name: postgres-secret
+          
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
         
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "250m"
+            memory: "1Gi" # Giving it a guaranteed 1GB
+            cpu: "500m"   # Guaranteed half a core
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "2Gi" # Cap it at 2GB
+            cpu: "1000m"  # Cap at 1 full core
         
         livenessProbe:
           exec:

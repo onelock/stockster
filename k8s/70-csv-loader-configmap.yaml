@@ -1,0 +1,281 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: csv-loader-code
+  namespace: stockster
+data:
+  load_csv_to_db.py: |
+    #!/usr/bin/env python3
+    """
+    Load CSV files from /data/ directory into PostgreSQL database
+    Production version - PostgreSQL only
+    """
+    
+    import os
+    import csv
+    import shutil
+    from pathlib import Path
+    from datetime import datetime
+    import psycopg2
+    
+    def get_db_connection():
+        """Get PostgreSQL database connection"""
+        conn = psycopg2.connect(
+            host=os.environ.get('POSTGRES_HOST', 'postgres'),
+            port=os.environ.get('POSTGRES_PORT', '5432'),
+            database=os.environ.get('POSTGRES_DB', 'stockster'),
+            user=os.environ.get('POSTGRES_USER', 'stockster'),
+            password=os.environ.get('POSTGRES_PASSWORD', ''),
+        )
+        return conn
+    
+    def init_database(conn):
+        """Initialize database schema"""
+        cursor = conn.cursor()
+        
+        try:
+            print("Initializing PostgreSQL database schema...")
+            
+            # stocks_trading table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS stocks_trading (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMP NOT NULL,
+                    name TEXT NOT NULL,
+                    last_price REAL,
+                    change_abs REAL,
+                    change_pct REAL,
+                    highest REAL,
+                    lowest REAL,
+                    volume BIGINT,
+                    market_value BIGINT,
+                    href TEXT
+                )
+            """)
+            
+            # stocks_historical table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS stocks_historical (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMP NOT NULL,
+                    name TEXT NOT NULL,
+                    year_high REAL,
+                    date_year_high TEXT,
+                    change_1d REAL,
+                    change_1m REAL,
+                    change_in_y REAL,
+                    change_1y REAL
+                )
+            """)
+            
+            # stocks_metrics table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS stocks_metrics (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMP NOT NULL,
+                    name TEXT NOT NULL,
+                    pe_ratio REAL,
+                    ps_ratio REAL,
+                    earning_per_share REAL,
+                    equity_per_share REAL,
+                    dividend_yield REAL,
+                    direct_return REAL
+                )
+            """)
+            
+            # Create indexes
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_trading_name_timestamp 
+                ON stocks_trading(name, timestamp DESC)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_trading_timestamp 
+                ON stocks_trading(timestamp DESC)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_historical_name_timestamp 
+                ON stocks_historical(name, timestamp DESC)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_metrics_name_timestamp 
+                ON stocks_metrics(name, timestamp DESC)
+            """)
+            
+            conn.commit()
+            print("✓ Database schema initialized successfully")
+            
+        except Exception as e:
+            conn.rollback()
+            print(f"✗ Error initializing database: {e}")
+            raise
+    
+    def parse_csv_value(value, field_type='str'):
+        """Parse CSV value and convert to appropriate type"""
+        if not value or value == '':
+            return None
+        
+        try:
+            if field_type == 'float':
+                value = value.replace(',', '.').replace(' ', '')
+                return float(value)
+            elif field_type == 'int':
+                value = value.replace(' ', '').replace(',', '')
+                return int(value)
+            else:
+                return value
+        except (ValueError, AttributeError):
+            return None
+    
+    def load_csv_file(csv_path, table_name, conn):
+        """Load a CSV file into the specified table"""
+        if not os.path.exists(csv_path):
+            print(f"⚠️  CSV file not found: {csv_path}")
+            return 0
+        
+        print(f"\nLoading {csv_path} into {table_name}...")
+        
+        cursor = conn.cursor()
+        rows_inserted = 0
+        
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                
+                field_types = {
+                    'stocks_trading': {
+                        'last_price': 'float', 'change_abs': 'float', 'change_pct': 'float',
+                        'highest': 'float', 'lowest': 'float', 'volume': 'int', 'market_value': 'int'
+                    },
+                    'stocks_historical': {
+                        'year_high': 'float', 'change_1d': 'float', 'change_1m': 'float',
+                        'change_in_y': 'float', 'change_1y': 'float'
+                    },
+                    'stocks_metrics': {
+                        'pe_ratio': 'float', 'ps_ratio': 'float', 'earning_per_share': 'float',
+                        'equity_per_share': 'float', 'dividend_yield': 'float', 'direct_return': 'float'
+                    }
+                }
+                
+                types = field_types.get(table_name, {})
+                
+                batch = []
+                batch_size = 1000
+                
+                for row in reader:
+                    parsed_row = {}
+                    for key, value in row.items():
+                        field_type = types.get(key, 'str')
+                        parsed_row[key] = parse_csv_value(value, field_type)
+                    
+                    batch.append(parsed_row)
+                    
+                    if len(batch) >= batch_size:
+                        rows_inserted += insert_batch(cursor, table_name, batch)
+                        batch = []
+                
+                if batch:
+                    rows_inserted += insert_batch(cursor, table_name, batch)
+                
+                conn.commit()
+                print(f"✓ Inserted {rows_inserted} rows into {table_name}")
+                
+        except Exception as e:
+            conn.rollback()
+            print(f"✗ Error loading CSV: {e}")
+            raise
+        
+        return rows_inserted
+    
+    def insert_batch(cursor, table_name, batch):
+        """Insert a batch of rows into the table"""
+        if not batch:
+            return 0
+        
+        columns = list(batch[0].keys())
+        placeholders = ', '.join(['%s'] * len(columns))
+        column_names = ', '.join(columns)
+        
+        query = f"INSERT INTO {table_name} ({column_names}) VALUES ({placeholders})"
+        
+        values = []
+        for row in batch:
+            values.append(tuple(row[col] for col in columns))
+        
+        cursor.executemany(query, values)
+        
+        return len(values)
+    
+    def archive_csv_file(csv_path):
+        """Archive a CSV file to /data/archive/ with timestamp"""
+        csv_path = Path(csv_path)
+        
+        if not csv_path.exists():
+            return
+        
+        archive_dir = csv_path.parent / 'archive'
+        archive_dir.mkdir(exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        archived_name = f"{csv_path.stem}_{timestamp}{csv_path.suffix}"
+        archive_path = archive_dir / archived_name
+        
+        shutil.move(str(csv_path), str(archive_path))
+        print(f"📦 Archived to: {archive_path.relative_to(csv_path.parent.parent)}")
+    
+    def main():
+        """Main function to load all CSV files"""
+        print("=" * 60)
+        print("CSV to Database Loader (PostgreSQL)")
+        print("=" * 60)
+        
+        print(f"\nPostgreSQL host: {os.environ.get('POSTGRES_HOST', 'postgres')}")
+        print(f"Database: {os.environ.get('POSTGRES_DB', 'stockster')}")
+        
+        try:
+            conn = get_db_connection()
+            print("✓ Connected to PostgreSQL database")
+        except Exception as e:
+            print(f"✗ Failed to connect to database: {e}")
+            return 1
+        
+        try:
+            init_database(conn)
+        except Exception as e:
+            print(f"✗ Failed to initialize database: {e}")
+            conn.close()
+            return 1
+        
+        data_dir = Path('/data')
+        csv_files = [
+            ('stocks_trading.csv', 'stocks_trading'),
+            ('stocks_historical.csv', 'stocks_historical'),
+            ('stocks_metrics.csv', 'stocks_metrics'),
+        ]
+        
+        total_rows = 0
+        
+        for csv_file, table_name in csv_files:
+            csv_path = data_dir / csv_file
+            try:
+                rows = load_csv_file(str(csv_path), table_name, conn)
+                total_rows += rows
+                
+                if rows > 0:
+                    archive_csv_file(csv_path)
+            except Exception as e:
+                print(f"✗ Error processing {csv_file}: {e}")
+                continue
+        
+        conn.close()
+        
+        print("\n" + "=" * 60)
+        print(f"✓ Load complete! Total rows inserted: {total_rows}")
+        print("=" * 60)
+        
+        return 0
+    
+    if __name__ == "__main__":
+        exit(main())

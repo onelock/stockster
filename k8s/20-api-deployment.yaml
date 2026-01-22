@@ -29,32 +29,11 @@ spec:
         - containerPort: 8000
           name: http
         
-        env:
-        - name: POSTGRES_HOST
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: host
-        - name: POSTGRES_PORT
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: port
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: database
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: username
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: password
+        envFrom:
+        - configMapRef: 
+          name: postgres-db-config 
+        - secretRef:
+            name: postgres-secret
         
         resources:
           requests:

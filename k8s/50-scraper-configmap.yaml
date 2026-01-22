@@ -11,7 +11,6 @@ data:
     import os
     import csv
 
-    DEBUG = 0
     CSV_OUTPUT_DIR = os.getenv('CSV_OUTPUT_DIR', '/data')
 
     def clean_number(s):
@@ -88,7 +87,7 @@ data:
 
             browser.close()
 
-        timestamp = datetime.datetime.now().isoformat(timespec="seconds")
+        timestamp = datetime.datetime.today().strftime('%Y-%m-%d')
         
         os.makedirs(CSV_OUTPUT_DIR, exist_ok=True)
         
@@ -102,7 +101,7 @@ data:
             if stock['trading'] and len(stock['trading']) >= 8:
                 t = stock['trading']
                 trading_data.append({
-                    'timestamp': timestamp,
+                    'timestamp': f'{timestamp}T{t[-1]}:00',
                     'name': t[0],
                     'last_price': clean_number(t[1]),
                     'change_abs': clean_number(t[2]),
@@ -117,7 +116,7 @@ data:
             if stock['historical'] and len(stock['historical']) >= 7:
                 h = stock['historical']
                 historical_data.append({
-                    'timestamp': timestamp,
+                    'timestamp': f'{timestamp}T{t[-1]}:00',
                     'name': h[0],
                     'year_high': clean_number(h[1]),
                     'date_year_high': h[2],
@@ -130,7 +129,7 @@ data:
             if stock['metrics'] and len(stock['metrics']) >= 7:
                 m = stock['metrics']
                 metrics_data.append({
-                    'timestamp': timestamp,
+                    'timestamp': f'{timestamp}T{t[-1]}:00',
                     'name': m[0],
                     'pe_ratio': clean_number(m[1]),
                     'ps_ratio': clean_number(m[2]),
