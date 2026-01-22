@@ -172,3 +172,9 @@ rollback.sh
 load-github-token.sh
 start_api.sh
 *.sh
+alpaca_data_to_db.py
+create_readonly_user.py
+load_csv_to_db.py
+migrate_sqlite_to_postgres.py
+analysis/volatility.py
+ZZ_Chat.steps
