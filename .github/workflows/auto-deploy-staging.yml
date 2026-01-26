@@ -24,6 +24,7 @@ jobs:
     outputs:
       dashboard_changed: ${{ steps.filter.outputs.dashboard }}
       api_changed: ${{ steps.filter.outputs.app }}
+      scraper_changed: ${{ steps.filter.outputs.scraper }}
       manifests_changed: ${{ steps.filter.outputs.k8s }}
       image_tag: ${{ steps.meta.outputs.tag }}
     
@@ -44,11 +45,15 @@ jobs:
             dashboard:
               - 'dashboard/**'
               - 'docker/Dockerfile.dashboard'
-              - 'requirements.txt'
+              - 'dashboard/requirements-dsh.txt'
             app:
               - 'app/**'
               - 'docker/Dockerfile.api'
-              - 'requirements.txt'
+              - 'app/requirements-trdeng.txt'
+            scraper:
+              - 'di_scraper/**'
+              - 'docker/Dockerfile.scraper'
+              - 'di_scraper/requirements-scraper.txt'
             k8s:
               - 'k8s/**'
   
@@ -59,6 +64,7 @@ jobs:
     outputs:
       deploy_api: ${{ needs.detect-changes.outputs.api_changed == 'true' }}
       deploy_dashboard: ${{ needs.detect-changes.outputs.dashboard_changed == 'true' }}
+      deploy_scraper: ${{ needs.detect-changes.outputs.scraper_changed == 'true' }}
       deploy_k8s: ${{ needs.detect-changes.outputs.manifests_changed == 'true' }}
       anything_to_deploy: ${{ steps.check.outputs.deploy_needed }}
     
@@ -69,7 +75,8 @@ jobs:
           DEPLOY_NEEDED="false"
           if [ "${{ needs.detect-changes.outputs.api_changed }}" == "true" ] || \
              [ "${{ needs.detect-changes.outputs.dashboard_changed }}" == "true" ] || \
-             [ "${{ needs.detect-changes.outputs.manifests_changed }}" == "true" ]; then
+             [ "${{ needs.detect-changes.outputs.manifests_changed }}" == "true" ] || \
+             [ "${{ needs.detect-changes.outputs.scraper_changed }}" == "true" ]; then
             DEPLOY_NEEDED="true"
           fi
           echo "deploy_needed=$DEPLOY_NEEDED" >> $GITHUB_OUTPUT
@@ -121,13 +128,27 @@ jobs:
       registry: ghcr.io
     secrets:
       github_token: ${{ secrets.GITHUB_TOKEN }}
+  
+  build-scraper:
+    name: Build Scraper
+    needs: [detect-changes, create-deployment-plan]
+    if: needs.create-deployment-plan.outputs.deploy_scraper == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      component: scraper
+      dockerfile: docker/Dockerfile.scraper
+      image_name: stockster-scraper
+      image_tag: ${{ needs.detect-changes.outputs.image_tag }}
+      registry: ghcr.io
+    secrets:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
 
   # =============================================================================
   # PHASE 3: Deploy to Kubernetes (Gated by Build Success)
   # =============================================================================
   deploy:
     name: Deploy to Staging
-    needs: [detect-changes, create-deployment-plan, build-dashboard, build-api]
+    needs: [detect-changes, create-deployment-plan, build-dashboard, build-api, build-scraper]
     if: |
       always() &&
       needs.create-deployment-plan.outputs.anything_to_deploy == 'true' &&
@@ -143,5 +164,5 @@ jobs:
       registry: ghcr.io
     secrets:
       kube_config: ${{ secrets.KUBE_CONFIG }}
-      postgres_password: ${{ secrets.PG_PASSWORD }}
+      postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
       github_token: ${{ secrets.GITHUB_TOKEN }}
