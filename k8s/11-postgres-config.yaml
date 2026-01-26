@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-db-config
+  labels:
+    app: postgresql-db
+data:
+  PG_DB: stockster-db
+  PG_USER: stockster
+  PG_HOST: postgres-stockster-svc # The name of your K8s Service for 
+  PG_DATA: /var/lib/postgresql/data/pgdata
+  PG_PORT: 5432
+        

@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stockster
+
+commonLabels:
+  project: stockster
+
+resources:
+  # --- Phase 1: Base & Configuration ---
+  - 00-namespace.yaml
+  - 10-postgres-secret.yaml
+  - 11-postgres-config.yaml
+  - 12-scraper-config.yaml
+  - 15-pvc.yaml
+  
+  # --- Phase 2: State (Database) ---
+  - 20-postgres.yaml
+
+  # --- Phase 3: Initialization (Migrations) ---
+  # - 30-migration-job.yaml
+
+  # --- Phase 4: Applications ---
+  # - 40-api.yaml
+  # - 41-dashboard.yaml
+
+  # --- Phase 5: Background Tasks ---
+  - 50-scraper-job.yaml
+  # - 51-scraper-evening.yaml
+
+  # --- Phase 6: Infrastructure/Debug ---
+  # - 90-inspect.yaml
+  # - 91-registry.yaml
+
+images:
+  - name: stockster/dashboard
+    newName: ghcr.io/onelock/stockster-dashboard
+    newTag: latest
+  - name: stockster/api
+    newName: ghcr.io/onelock/stockster-api
+    newTag: latest
+  - name: stockster/scraper
+    newName: ghcr.io/onelock/stockster-scraper
+    newTag: latest
