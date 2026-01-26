@@ -5,379 +5,143 @@ on:
     branches:
       - main
 
+# Prevent concurrent deployments to staging
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
-  REPO_OWNER_LC: onelock
+  NAMESPACE: stockster
 
 jobs:
+  # =============================================================================
+  # PHASE 1: Detect Changes & Plan Deployment
+  # =============================================================================
   detect-changes:
-    name: Detect Changed Components
+    name: Detect Changes
     runs-on: ubuntu-latest
-    
     outputs:
-      build_dashboard: ${{ steps.changes.outputs.build_dashboard }}
-      build_api: ${{ steps.changes.outputs.build_api }}
-      deploy_manifests: ${{ steps.changes.outputs.deploy_manifests }}
-      short_sha: ${{ steps.sha.outputs.short }}
+      dashboard_changed: ${{ steps.filter.outputs.dashboard }}
+      api_changed: ${{ steps.filter.outputs.app }}
+      manifests_changed: ${{ steps.filter.outputs.k8s }}
+      image_tag: ${{ steps.meta.outputs.tag }}
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       
-      - name: Get short SHA
-        id: sha
-        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      - name: Generate image tag
+        id: meta
+        run: echo "tag=main-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
       
-      - name: Detect changed components
-        id: changes
+      - name: Detect changed files
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            dashboard:
+              - 'dashboard/**'
+              - 'docker/Dockerfile.dashboard'
+              - 'requirements.txt'
+            app:
+              - 'app/**'
+              - 'docker/Dockerfile.api'
+              - 'requirements.txt'
+            k8s:
+              - 'k8s/**'
+  
+  create-deployment-plan:
+    name: Create Deployment Plan
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    outputs:
+      deploy_api: ${{ needs.detect-changes.outputs.api_changed == 'true' }}
+      deploy_dashboard: ${{ needs.detect-changes.outputs.dashboard_changed == 'true' }}
+      deploy_k8s: ${{ needs.detect-changes.outputs.manifests_changed == 'true' }}
+      anything_to_deploy: ${{ steps.check.outputs.deploy_needed }}
+    
+    steps:
+      - name: Determine deployment plan
+        id: check
         run: |
-          # Get list of changed files
-          if [ "${{ github.event_name }}" == "push" ]; then
-            # Check if we can access the before commit
-            if ! git cat-file -e ${{ github.event.before }} 2>/dev/null; then
-              # Before commit not available - build all
-              echo "build_dashboard=true" >> $GITHUB_OUTPUT
-              echo "build_api=true" >> $GITHUB_OUTPUT
-              echo "⚠️ Previous commit not available - building all components"
-            else
-              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
-              echo "Changed files:"
-              echo "$CHANGED_FILES"
-              
-              # Check if dashboard needs rebuild
-              if echo "$CHANGED_FILES" | grep -qE '^(dashboard/|docker/Dockerfile\.dashboard|requirements\.txt)'; then
-                echo "build_dashboard=true" >> $GITHUB_OUTPUT
-                echo "✓ Dashboard changes detected"
-              else
-                echo "build_dashboard=false" >> $GITHUB_OUTPUT
-                echo "✗ No dashboard changes"
-              fi
-              
-              # Check if API needs rebuild
-              if echo "$CHANGED_FILES" | grep -qE '^(api/|docker/Dockerfile\.api|requirements\.txt)'; then
-                echo "build_api=true" >> $GITHUB_OUTPUT
-                echo "✓ API changes detected"
-              else
-                echo "build_api=false" >> $GITHUB_OUTPUT
-                echo "✗ No API changes"
-              fi
-              
-              # Check if analysis module changed (affects dashboard and API)
-              if echo "$CHANGED_FILES" | grep -qE '^analysis/'; then
-                echo "build_dashboard=true" >> $GITHUB_OUTPUT
-                echo "build_api=true" >> $GITHUB_OUTPUT
-                echo "✓ Analysis module changed - rebuilding dashboard and API"
-              fi
-              
-              # Check if Kubernetes manifests changed (requires deployment)
-              if echo "$CHANGED_FILES" | grep -qE '^k8s/'; then
-                echo "deploy_manifests=true" >> $GITHUB_OUTPUT
-                echo "✓ Kubernetes manifests changed - will deploy"
-              else
-                echo "deploy_manifests=false" >> $GITHUB_OUTPUT
-              fi
-            fi
+          DEPLOY_NEEDED="false"
+          if [ "${{ needs.detect-changes.outputs.api_changed }}" == "true" ] || \
+             [ "${{ needs.detect-changes.outputs.dashboard_changed }}" == "true" ] || \
+             [ "${{ needs.detect-changes.outputs.manifests_changed }}" == "true" ]; then
+            DEPLOY_NEEDED="true"
           fi
+          echo "deploy_needed=$DEPLOY_NEEDED" >> $GITHUB_OUTPUT
       
-      - name: Build summary
+      - name: Print deployment plan
         run: |
-          echo "📦 Build Plan:"
-          if [ "${{ steps.changes.outputs.build_dashboard }}" == "true" ]; then
-            echo "  ✅ Dashboard will be built"
+          echo "## 📋 Deployment Plan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tag**: \`${{ needs.detect-changes.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Components" >> $GITHUB_STEP_SUMMARY
+          echo "- **API**: ${{ needs.detect-changes.outputs.api_changed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dashboard**: ${{ needs.detect-changes.outputs.dashboard_changed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **K8s Manifests**: ${{ needs.detect-changes.outputs.manifests_changed }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check.outputs.deploy_needed }}" == "true" ]; then
+            echo "**Decision**: ✅ Deployment will proceed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "  ⏭️  Dashboard will be skipped"
-          fi
-          if [ "${{ steps.changes.outputs.build_api }}" == "true" ]; then
-            echo "  ✅ API will be built"
-          else
-            echo "  ⏭️  API will be skipped"
+            echo "**Decision**: ⏭️ No deployment needed" >> $GITHUB_STEP_SUMMARY
           fi
 
+  # =============================================================================
+  # PHASE 2: Build Images (Parallel, Conditional)
+  # =============================================================================
   build-dashboard:
-    name: Build Dashboard Image
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.build_dashboard == 'true'
-    
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push dashboard
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.dashboard
-          push: true
-          tags: |
-            ghcr.io/onelock/stockster-dashboard:main-${{ needs.detect-changes.outputs.short_sha }}
-            ghcr.io/onelock/stockster-dashboard:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
+    name: Build Dashboard
+    needs: [detect-changes, create-deployment-plan]
+    if: needs.create-deployment-plan.outputs.deploy_dashboard == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      component: dashboard
+      dockerfile: docker/Dockerfile.dashboard
+      image_name: stockster-dashboard
+      image_tag: ${{ needs.detect-changes.outputs.image_tag }}
+      registry: ghcr.io
+    secrets:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
+  
   build-api:
-    name: Build API Image
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.build_api == 'true'
-    
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push API
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.api
-          push: true
-          tags: |
-            ghcr.io/onelock/stockster-api:main-${{ needs.detect-changes.outputs.short_sha }}
-            ghcr.io/onelock/stockster-api:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    name: Build API
+    needs: [detect-changes, create-deployment-plan]
+    if: needs.create-deployment-plan.outputs.deploy_api == 'true'
+    uses: ./.github/workflows/_build-image.yml
+    with:
+      component: api
+      dockerfile: docker/Dockerfile.api
+      image_name: stockster-api
+      image_tag: ${{ needs.detect-changes.outputs.image_tag }}
+      registry: ghcr.io
+    secrets:
+      github_token: ${{ secrets.GITHUB_TOKEN }}
 
+  # =============================================================================
+  # PHASE 3: Deploy to Kubernetes (Gated by Build Success)
+  # =============================================================================
   deploy:
-    name: Deploy to Kubernetes
-    runs-on: ubuntu-latest
-    needs: [detect-changes, build-dashboard, build-api]
-    # Run if no failures AND at least one component needs deployment
-    # Skipped jobs are OK (they count as success for dependency purposes)
+    name: Deploy to Staging
+    needs: [detect-changes, create-deployment-plan, build-dashboard, build-api]
     if: |
       always() &&
+      needs.create-deployment-plan.outputs.anything_to_deploy == 'true' &&
       !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled') &&
-      (needs.detect-changes.outputs.build_dashboard == 'true' || 
-       needs.detect-changes.outputs.build_api == 'true' || 
-       needs.detect-changes.outputs.deploy_manifests == 'true')
-    environment: staging
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
-      
-      # Installs 'yq', a portable command-line YAML processor.
-      # This tool is required to parse or modify YAML files (such as Helm charts 
-      # or other configuration files) in subsequent steps of the CI/CD pipeline.
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-      
-      - name: Configure kubectl
-        run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
-      
-      - name: Create namespace if not exists
-        run: |
-          kubectl create namespace stockster --dry-run=client -o yaml | kubectl apply -f -
-      
-      - name: Create or update secrets
-        run: |
-          kubectl create secret docker-registry ghcr-secret \
-            --docker-server=${{ env.REGISTRY }} \
-            --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.GITHUB_TOKEN }} \
-            --namespace=stockster \
-            --dry-run=client -o yaml | kubectl apply -f -
-          
-          kubectl create secret generic postgres-secret \
-            --from-literal=username=stockster \
-            --from-literal=password=${{ secrets.POSTGRES_PASSWORD }} \
-            --from-literal=database=stockster \
-            --from-literal=host=postgres \
-            --from-literal=port=5432 \
-            --namespace=stockster \
-            --dry-run=client -o yaml | kubectl apply -f -
-      
-      - name: Update 10-kustomization with new tags
-        run: |
-          IMAGE_TAG="main-${{ needs.detect-changes.outputs.short_sha }}"
-          
-          cd k8s
-          
-          # Update image tags in 10-kustomization.yaml for components that changed
-          if [ "${{ needs.detect-changes.outputs.build_dashboard }}" == "true" ]; then
-            echo "✓ Updating dashboard tag to $IMAGE_TAG"
-            yq eval -i '(.images[] | select(.name == "stockster/dashboard") | .newTag) = "'$IMAGE_TAG'"' 10-kustomization.yaml
-          fi
-          
-          if [ "${{ needs.detect-changes.outputs.build_api }}" == "true" ]; then
-            echo "✓ Updating API tag to $IMAGE_TAG"
-            yq eval -i '(.images[] | select(.name == "stockster/api") | .newTag) = "'$IMAGE_TAG'"' 10-kustomization.yaml
-          fi
-          
-          echo ""
-          echo "Updated 10-kustomization.yaml:"
-          cat 10-kustomization.yaml
-      
-      - name: Apply Kubernetes manifests
-        run: |
-          NAMESPACE="stockster"
-          
-          echo "Deploying changes via Kustomize..."
-          kubectl apply -k k8s/
-          
-          echo ""
-          echo "Waiting for PostgreSQL to be ready..."
-          kubectl wait --for=condition=ready pod -l app=postgres -n $NAMESPACE --timeout=5m || true
-      
-      - name: Wait for rollouts
-        run: |
-          NAMESPACE="stockster"
-          
-          echo ""
-          echo "Waiting for application rollout to complete..."
-          if [ "${{ needs.detect-changes.outputs.build_dashboard }}" == "true" ]; then
-            echo "Checking dashboard rollout..."
-            kubectl rollout status deployment/stockster-dashboard -n $NAMESPACE --timeout=5m
-          fi
-          if [ "${{ needs.detect-changes.outputs.build_api }}" == "true" ]; then
-            echo "Checking API rollout..."
-            kubectl rollout status deployment/stockster-api -n $NAMESPACE --timeout=5m
-          fi
-          
-          echo ""
-          echo "✅ Deployment completed successfully!"
-
-  verify:
-    name: Verify Deployment
-    runs-on: ubuntu-latest
-    needs: [detect-changes, deploy]
-    if: success()
-    
-    steps:
-      - name: Configure kubectl
-        run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
-      
-      - name: Check deployment status
-        run: |
-          NAMESPACE="stockster"
-          
-          echo "Current deployment status:"
-          kubectl get deployments -n $NAMESPACE
-          kubectl get cronjobs -n $NAMESPACE
-          kubectl get pods -n $NAMESPACE
-      
-      - name: Verify images
-        run: |
-          NAMESPACE="stockster"
-          
-          echo ""
-          echo "Current image versions:"
-          kubectl get deployment stockster-dashboard -n $NAMESPACE \
-            -o jsonpath='{.spec.template.spec.containers[0].image}'
-          echo ""
-          kubectl get deployment stockster-api -n $NAMESPACE \
-            -o jsonpath='{.spec.template.spec.containers[0].image}'
-          echo ""
-      
-      - name: Basic health checks
-        run: |
-          NAMESPACE="stockster"
-          
-          echo "Running basic health checks..."
-          kubectl get pods -n $NAMESPACE -l app=stockster-dashboard
-          kubectl get pods -n $NAMESPACE -l app=stockster-api
-          
-          echo ""
-          echo "✓ Verification complete!"
-
-  summary:
-    name: Deployment Summary
-    runs-on: ubuntu-latest
-    needs: [detect-changes, build-dashboard, build-api, deploy, verify]
-    if: always()
-    
-    steps:
-      - name: Create deployment summary
-        run: |
-          IMAGE_TAG="main-${{ needs.detect-changes.outputs.short_sha }}"
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: Production (stockster)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: \`$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Author**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Images Built & Published" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.detect-changes.outputs.build_dashboard }}" == "true" ]; then
-            if [ "${{ needs.build-dashboard.result }}" == "success" ]; then
-              echo "- ✅ \`ghcr.io/onelock/stockster-dashboard:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "- ❌ stockster-dashboard (build failed)" >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "- ⏭️ stockster-dashboard (no changes)" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ "${{ needs.detect-changes.outputs.build_api }}" == "true" ]; then
-            if [ "${{ needs.build-api.result }}" == "success" ]; then
-              echo "- ✅ \`ghcr.io/onelock/stockster-api:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "- ❌ stockster-api (build failed)" >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "- ⏭️ stockster-api (no changes)" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployment Status" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.deploy.result }}" == "success" ]; then
-            echo "- ✅ Deployment successful" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.deploy.result }}" == "skipped" ]; then
-            echo "- ⏭️ Deployment skipped (no changes)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- ❌ Deployment failed" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ "${{ needs.verify.result }}" == "success" ]; then
-            echo "- ✅ Verification successful" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.verify.result }}" == "skipped" ]; then
-            echo "- ⏭️ Verification skipped" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- ❌ Verification failed" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployed Resources" >> $GITHUB_STEP_SUMMARY
-          echo "- PostgreSQL Database" >> $GITHUB_STEP_SUMMARY
-          echo "- REST API (2 replicas)" >> $GITHUB_STEP_SUMMARY
-          echo "- Dashboard (2 replicas)" >> $GITHUB_STEP_SUMMARY
-          echo "- Scraper + Loader CronJob" >> $GITHUB_STEP_SUMMARY
+      !contains(needs.*.result, 'cancelled')
+    uses: ./.github/workflows/_deploy-k8s.yml
+    with:
+      environment: staging
+      namespace: stockster
+      image_tag: ${{ needs.detect-changes.outputs.image_tag }}
+      dashboard_changed: ${{ needs.detect-changes.outputs.dashboard_changed == 'true' }}
+      api_changed: ${{ needs.detect-changes.outputs.api_changed == 'true' }}
+      registry: ghcr.io
+    secrets:
+      kube_config: ${{ secrets.KUBE_CONFIG }}
+      postgres_password: ${{ secrets.PG_PASSWORD }}
+      github_token: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,155 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Deployment environment (staging or production)'
+        required: true
+        type: string
+      namespace:
+        description: 'Kubernetes namespace'
+        required: true
+        type: string
+      image_tag:
+        description: 'Image tag to deploy'
+        required: true
+        type: string
+      dashboard_changed:
+        description: 'Whether dashboard was updated'
+        required: false
+        type: boolean
+        default: false
+      api_changed:
+        description: 'Whether API was updated'
+        required: false
+        type: boolean
+        default: false
+      registry:
+        description: 'Container registry'
+        required: false
+        type: string
+        default: 'ghcr.io'
+    secrets:
+      kube_config:
+        required: true
+      postgres_password:
+        required: true
+      github_token:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: ./.github/actions/setup-kubectl
+        with:
+          kube_config: ${{ secrets.kube_config }}
+      
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      
+      - name: Create namespace
+        run: kubectl create namespace ${{ inputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Sync secrets
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=${{ inputs.registry }} \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.github_token }} \
+            --namespace=${{ inputs.namespace }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl create secret generic postgres-secret \
+            --from-literal=username=stockster \
+            --from-literal=password=${{ secrets.postgres_password }} \
+            --from-literal=database=stockster \
+            --from-literal=host=postgres \
+            --from-literal=port=5432 \
+            --namespace=${{ inputs.namespace }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Update kustomization
+        run: |
+          cd k8s
+          TAG="${{ inputs.image_tag }}"
+          
+          if [ "${{ inputs.dashboard_changed }}" == "true" ]; then
+            yq eval -i '(.images[] | select(.name == "stockster/dashboard") | .newTag) = "'$TAG'"' kustomization.yaml
+            echo "✓ Updated dashboard tag to $TAG"
+          fi
+          
+          if [ "${{ inputs.api_changed }}" == "true" ]; then
+            yq eval -i '(.images[] | select(.name == "stockster/api") | .newTag) = "'$TAG'"' kustomization.yaml
+            echo "✓ Updated API tag to $TAG"
+          fi
+          
+          echo ""
+          echo "Kustomization configuration:"
+          cat kustomization.yaml
+      
+      - name: Apply manifests
+        run: kubectl apply -k k8s/
+      
+      - name: Wait for database
+        run: kubectl wait --for=condition=ready pod -l app=postgres -n ${{ inputs.namespace }} --timeout=5m || true
+      
+      - name: Wait for rollouts
+        run: |
+          if [ "${{ inputs.dashboard_changed }}" == "true" ]; then
+            echo "Waiting for dashboard rollout..."
+            kubectl rollout status deployment/stockster-dashboard -n ${{ inputs.namespace }} --timeout=5m
+          fi
+          
+          if [ "${{ inputs.api_changed }}" == "true" ]; then
+            echo "Waiting for API rollout..."
+            kubectl rollout status deployment/stockster-api -n ${{ inputs.namespace }} --timeout=5m
+          fi
+          
+          echo "✅ Deployment complete"
+
+  verify:
+    name: Verify deployment
+    runs-on: ubuntu-latest
+    needs: deploy
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: ./.github/actions/setup-kubectl
+        with:
+          kube_config: ${{ secrets.kube_config }}
+      
+      - name: Verify resources
+        run: |
+          echo "## 🔍 Verification Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Namespace**: ${{ inputs.namespace }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tag**: \`${{ inputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Deployments" >> $GITHUB_STEP_SUMMARY
+          kubectl get deployments -n ${{ inputs.namespace }} -o wide >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Pods" >> $GITHUB_STEP_SUMMARY
+          kubectl get pods -n ${{ inputs.namespace }} -o wide >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Image Versions" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dashboard**: \`$(kubectl get deployment stockster-dashboard -n ${{ inputs.namespace }} -o jsonpath='{.spec.template.spec.containers[0].image}')\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **API**: \`$(kubectl get deployment stockster-api -n ${{ inputs.namespace }} -o jsonpath='{.spec.template.spec.containers[0].image}')\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "✅ Verification complete" >> $GITHUB_STEP_SUMMARY

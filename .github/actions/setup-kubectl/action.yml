@@ -1,0 +1,22 @@
+name: 'Setup kubectl'
+description: 'Configure kubectl with kubeconfig'
+
+inputs:
+  kube_config:
+    description: 'Base64 encoded kubeconfig'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+    
+    - name: Configure kubeconfig
+      shell: bash
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ inputs.kube_config }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config

@@ -26,7 +26,7 @@ vi ~/.kube/config
 cat ~/.kube/config | base64 -w 0
 ```
 
-### 2. POSTGRES_PASSWORD
+### 2. PG_PASSWORD
 Your PostgreSQL database password (the one you set in k8s/postgres-secret.yaml).
 
 **Generate a strong password:**
@@ -35,7 +35,7 @@ openssl rand -base64 32
 ```
 
 Save this password:
-- As GitHub Secret: `POSTGRES_PASSWORD`
+- As GitHub Secret: `PG_PASSWORD`
 - Update it in `k8s/postgres-secret.yaml` if deploying manually
 
 ## Workflow Triggers
@@ -91,7 +91,7 @@ kubectl create secret docker-registry ghcr-secret \
 
 kubectl create secret generic postgres-secret \
   --from-literal=username=stockster \
-  --from-literal=password=YOUR_POSTGRES_PASSWORD \
+  --from-literal=password=YOUR_PG_PASSWORD \
   --from-literal=database=stockster \
   --from-literal=host=postgres \
   --from-literal=port=5432 \
@@ -159,7 +159,7 @@ kubectl delete jobs -n stockster -l app=stockster-scraper
 ## Security Notes
 
 1. **Never commit secrets** - Use GitHub Secrets only
-2. **Rotate credentials** periodically (POSTGRES_PASSWORD, GITHUB_TOKEN)
+2. **Rotate credentials** periodically (PG_PASSWORD, GITHUB_TOKEN)
 3. **Limit kubeconfig permissions** - Create a service account with minimal permissions
 4. **Use separate environments** - Consider separate namespaces for staging/production
 
