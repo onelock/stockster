@@ -4,7 +4,8 @@ FROM mcr.microsoft.com/playwright/python:v1.57.0-jammy
 WORKDIR /app
 
 # Install dependencies
-RUN pip install --no-cache-dir playwright==1.57.0
+COPY di_scraper/requirements-scraper.txt .
+RUN pip install --no-cache-dir -r requirements-scraper.txt
 
 # Create data directory with write permissions for any user
 RUN mkdir -p /data && chmod 777 /data
