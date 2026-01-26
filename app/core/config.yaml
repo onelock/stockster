@@ -10,11 +10,11 @@ development:
 production:
   database:
     type: postgresql
-    host: ${POSTGRES_HOST:postgres-service}
-    port: ${POSTGRES_PORT:5432}
-    database: ${POSTGRES_DB:stockster}
-    user: ${POSTGRES_USER:stockster}
-    password: ${POSTGRES_PASSWORD}
+    host: ${PG_HOST:postgres-service}
+    port: ${PG_PORT:5432}
+    database: ${PG_DB:stockster}
+    user: ${PG_USER:stockster}
+    password: ${PG_PASSWORD}
     connect_timeout: 10
 
 # Default environment (can be overridden by ENVIRONMENT env var)

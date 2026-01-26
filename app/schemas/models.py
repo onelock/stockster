@@ -3,7 +3,7 @@ Core Pydantic data models for stock data entities.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -17,6 +17,7 @@ class StockTrading(BaseModel):
     lowest: Optional[float] = Field(None, description="Lowest price of the day")
     volume: Optional[int] = Field(None, description="Trading volume")
     market_value: Optional[int] = Field(None, description="Market capitalization")
+    list: Optional[str] = Field(None, description="Market Capital list of stock ")
     timestamp: datetime = Field(..., description="Data timestamp")
     href: Optional[str] = Field(None, description="URL to stock details")
 
@@ -31,6 +32,7 @@ class StockTrading(BaseModel):
                 "lowest": 704.6,
                 "volume": 181972,
                 "market_value": 1301793,
+                "list": "Large Cap",
                 "timestamp": "2026-01-16T14:15:21",
                 "href": "/bors/aktier/abb-730/"
             }
@@ -41,23 +43,25 @@ class StockHistorical(BaseModel):
     """Historical comparison data for a stock"""
     name: str = Field(..., description="Stock name/ticker")
     year_high: Optional[float] = Field(None, description="52-week high price")
-    date_year_high: Optional[str] = Field(None, description="Date of 52-week high")
+    date_year_high: Optional[float] = Field(None, description="Date of 52-week high")
     period_1d: Optional[float] = Field(None, description="1-day change %")
     period_1m: Optional[float] = Field(None, description="1-month change %")
     period_ytd: Optional[float] = Field(None, description="Year-to-date change %")
     period_1y: Optional[float] = Field(None, description="1-year change %")
+    list: Optional[str] = Field(None, description="Market Capital list of stock ")
     timestamp: datetime = Field(..., description="Data timestamp")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "name": "ABB",
-                "year_high": 726.4,
-                "date_year_high": "2025-11-15",
+                "year_high": 697.0,
+                "date_year_high": 726.4,
                 "period_1d": -0.34,
                 "period_1m": 3.61,
                 "period_ytd": 2.05,
                 "period_1y": 2.62,
+                "list": "Large Cap",
                 "timestamp": "2026-01-16T14:15:21"
             }
         }
@@ -72,6 +76,7 @@ class StockMetrics(BaseModel):
     equity_per_share: Optional[float] = Field(None, description="Equity per share")
     dividend_yield: Optional[float] = Field(None, description="Dividend yield %")
     direct_return: Optional[float] = Field(None, description="Direct return %")
+    list: Optional[str] = Field(None, description="Market Capital list of stock ")
     timestamp: datetime = Field(..., description="Data timestamp")
 
     class Config:
@@ -84,6 +89,7 @@ class StockMetrics(BaseModel):
                 "equity_per_share": 90.32,
                 "dividend_yield": 10.94,
                 "direct_return": 2.8,
+                "list": "Large Cap",
                 "timestamp": "2026-01-16T14:15:21"
             }
         }
@@ -114,5 +120,53 @@ class AlpacaStocks(BaseModel):
                 "vwap": 258.98
             }
         }
+
+
+class StockTradingBulkInsert(BaseModel):
+    """Bulk insert request for trading data"""
+    timestamp: str = Field(..., description="Data timestamp")
+    list: str = Field(..., description="Stock list category")
+    name: str = Field(..., description="Stock name/ticker")
+    last_price: Optional[float] = Field(None, description="Last traded price")
+    change_abs: Optional[float] = Field(None, description="Absolute price change")
+    change_pct: Optional[float] = Field(None, description="Percentage price change")
+    highest: Optional[float] = Field(None, description="Highest price of the day")
+    lowest: Optional[float] = Field(None, description="Lowest price of the day")
+    volume: Optional[int] = Field(None, description="Trading volume")
+    market_value: Optional[int] = Field(None, description="Market capitalization")
+    href: Optional[str] = Field(None, description="URL to stock details")
+
+
+class StockHistoricalBulkInsert(BaseModel):
+    """Bulk insert request for historical data"""
+    timestamp: str = Field(..., description="Data timestamp")
+    list: str = Field(..., description="Stock list category")
+    name: str = Field(..., description="Stock name/ticker")
+    year_high: Optional[float] = Field(None, description="52-week high price")
+    date_year_high: Optional[float] = Field(None, description="Price on this date previous 52-week")
+    change_1d: Optional[float] = Field(None, description="1-day change %")
+    change_1m: Optional[float] = Field(None, description="1-month change %")
+    change_in_y: Optional[float] = Field(None, description="Year-to-date change %")
+    change_1y: Optional[float] = Field(None, description="1-year change %")
+
+
+class StockMetricsBulkInsert(BaseModel):
+    """Bulk insert request for metrics data"""
+    timestamp: str = Field(..., description="Data timestamp")
+    list: str = Field(..., description="Stock list category")
+    name: str = Field(..., description="Stock name/ticker")
+    pe_ratio: Optional[float] = Field(None, description="Price-to-Earnings ratio")
+    ps_ratio: Optional[float] = Field(None, description="Price-to-Sales ratio")
+    earning_per_share: Optional[float] = Field(None, description="Earnings per share")
+    equity_per_share: Optional[float] = Field(None, description="Equity per share")
+    dividend_yield: Optional[float] = Field(None, description="Dividend yield %")
+    direct_return: Optional[float] = Field(None, description="Direct return %")
+
+
+class BulkInsertRequest(BaseModel):
+    """Request to bulk insert stock data"""
+    trading: List[StockTradingBulkInsert] = Field(default_factory=list)
+    historical: List[StockHistoricalBulkInsert] = Field(default_factory=list)
+    metrics: List[StockMetricsBulkInsert] = Field(default_factory=list)
         
 

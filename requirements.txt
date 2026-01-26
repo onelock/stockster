@@ -78,3 +78,5 @@ uvloop==0.22.1
 watchdog==6.0.0
 watchfiles==1.1.1
 websockets==16.0
+alembic==1.18.1
+psycopg2-binary==2.9.11

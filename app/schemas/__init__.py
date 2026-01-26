@@ -5,7 +5,11 @@ Expose schemas commonly used by importing application logic.
 from .models import (
     StockTrading,
     StockHistorical,
-    StockMetrics
+    StockMetrics,
+    StockTradingBulkInsert,
+    StockHistoricalBulkInsert,
+    StockMetricsBulkInsert,
+    BulkInsertRequest
 )
 
 from .responses import (

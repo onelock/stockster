@@ -78,14 +78,14 @@ with tab_main:
     # Sidebar
     # ============================================================================
 
-    with st.sidebar:
-        render_health_check(data_loader)
+    # with st.sidebar:
+        # render_health_check(data_loader)
 
     # Load data
     df = load_data()
 
     if df.empty:
-        st.warning("No data available. Please check dev API connection at http://localhost:8001")
+        st.warning("No data available. Please check dev API connection at http://localhost:8000")
         st.info("Start dev API with: `python3 api/main.dev.py`")
         st.stop()
 
@@ -111,8 +111,8 @@ with tab_main:
     # Multi-Stock Comparison
     # ============================================================================
 
-    if compare_mode:
-        render_comparison(stocks, days, load_stock_history)
+    # if compare_mode:
+    #     render_comparison(stocks, days, load_stock_history)
 
 
     # ============================================================================
@@ -122,39 +122,39 @@ with tab_main:
     st.subheader(f"🔍 Detailed Analysis — {selected}")
 
     # Load historical data
-    df_stock = load_stock_history(selected, days=days)
+    # df_stock = load_stock_history(selected, days=days)
 
-    if df_stock.empty:
-        st.warning(f"No historical data for {selected}")
-        st.stop()
+    # if df_stock.empty:
+    #     st.warning(f"No historical data for {selected}")
+    #     st.stop()
 
     # Display metrics
-    render_stock_metrics(df_stock.iloc[-1])
+    # render_stock_metrics(df_stock.iloc[-1])
 
     # Resample data based on selected interval
-    df_resampled = resample_data(df_stock, selected_interval)
+    # df_resampled = resample_data(df_stock, selected_interval)
 
-    if df_resampled.empty:
-        st.warning("Not enough data for the selected interval")
-        st.stop()
+    # if df_resampled.empty:
+    #     st.warning("Not enough data for the selected interval")
+    #     st.stop()
 
     # Add technical indicators and signals
-    df_chart = prepare_chart_data(df_resampled)
+    # df_chart = prepare_chart_data(df_resampled)
 
     # ============================================================================
     # Price Chart with Signals
     # ============================================================================
 
-    render_price_chart(df_chart, selected_interval_label)
+    # render_price_chart(df_chart, selected_interval_label)
 
     # ============================================================================
     # Technical Indicators
     # ============================================================================
 
-    render_technical_indicators(df_chart)
+    # render_technical_indicators(df_chart)
 
     # ============================================================================
     # Raw Data
     # ============================================================================
 
-    render_raw_data(df_chart, df_stock, selected_interval_label)
+    # render_raw_data(df_chart, df_stock, selected_interval_label)

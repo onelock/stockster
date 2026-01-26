@@ -7,7 +7,8 @@ from ....services.stock_service import StockService
 from ....schemas import (
     StocksListResponse, LatestStocksResponse,
     StockDetailResponse, StockHistoricalResponse,
-    StockMetricsResponse, SearchResponse, DatabaseStats
+    StockMetricsResponse, SearchResponse, DatabaseStats,
+    BulkInsertRequest
 )
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
@@ -130,3 +131,38 @@ async def get_stock_metrics(
             detail=f"Metrics for '{name}' not found"
         )
     return result
+
+
+@router.post("/bulk", response_model=dict)
+async def bulk_insert_stocks(
+    data: BulkInsertRequest,
+    service: StockService = Depends(get_stock_service)
+) -> dict:
+    """
+    Bulk insert stock data from scraper.
+    
+    Accepts trading, historical, and metrics data in bulk.
+    Use this endpoint to populate the database from scrapers.
+    """
+    try:
+        # Convert Pydantic models to dicts
+        trading_data = [item.model_dump() for item in data.trading]
+        historical_data = [item.model_dump() for item in data.historical]
+        metrics_data = [item.model_dump() for item in data.metrics]
+        
+        result = service.bulk_insert_data(
+            trading_data, 
+            historical_data, 
+            metrics_data
+        )
+        
+        return {
+            "success": True,
+            "message": "Data inserted successfully",
+            **result
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to insert data: {str(e)}"
+        )

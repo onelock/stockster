@@ -19,7 +19,7 @@ def render_latest_stocks(df: pd.DataFrame):
             st.metric(
                 label=stock['name'],
                 value=f"${stock['last_price']:.2f}",
-                delta=f"{stock['change_pct']:.2f}%"
+                # delta=f"{stock['change_pct']:.2f}%"
             )
     
     # Full stock list

@@ -17,7 +17,7 @@ class StockRepository:
             cur.execute("""
                 SELECT DISTINCT ON (name)
                     name, last_price, change_abs, change_pct,
-                    highest, lowest, volume, market_value,
+                    highest, lowest, volume, market_value, list,
                     timestamp, href
                 FROM stock_data
                 ORDER BY name, timestamp DESC
@@ -38,7 +38,7 @@ class StockRepository:
             # Get all stocks at that timestamp
             cur.execute("""
                 SELECT name, last_price, change_abs, change_pct,
-                       highest, lowest, volume, market_value,
+                       highest, lowest, volume, market_value, list,
                        timestamp, href
                 FROM stock_data
                 WHERE timestamp = %s
@@ -54,7 +54,7 @@ class StockRepository:
         with self.conn.cursor() as cur:
             cur.execute("""
                 SELECT name, last_price, change_abs, change_pct,
-                       highest, lowest, volume, market_value,
+                       highest, lowest, volume, market_value, list,
                        timestamp, href
                 FROM stock_data
                 WHERE name = %s AND timestamp >= %s
@@ -69,7 +69,7 @@ class StockRepository:
         with self.conn.cursor() as cur:
             cur.execute("""
                 SELECT name, year_high, date_year_high,
-                       period_1d, period_1m, period_ytd, period_1y,
+                       period_1d, period_1m, period_ytd, period_1y, list,
                        timestamp
                 FROM stock_historical
                 WHERE name = %s AND timestamp >= %s
@@ -84,7 +84,7 @@ class StockRepository:
         with self.conn.cursor() as cur:
             cur.execute("""
                 SELECT name, pe_ratio, ps_ratio, earning_per_share,
-                       equity_per_share, dividend_yield, direct_return,
+                       equity_per_share, dividend_yield, direct_return, list,
                        timestamp
                 FROM stock_metrics
                 WHERE name = %s AND timestamp >= %s
@@ -124,4 +124,83 @@ class StockRepository:
                 cur.execute("SELECT 1")
                 return True
         except Exception:
-            return False
+            return False    
+    def bulk_insert_trading(self, trading_data: List[Dict[str, Any]]) -> int:
+        """Bulk insert trading data."""
+        if not trading_data:
+            return 0
+        
+        with self.conn.cursor() as cur:
+            # Use ON CONFLICT to handle duplicates
+            cur.executemany("""
+                INSERT INTO stock_data 
+                    (name, last_price, change_abs, change_pct, highest, lowest, 
+                     volume, market_value, timestamp, href, list)
+                VALUES (%(name)s, %(last_price)s, %(change_abs)s, %(change_pct)s, 
+                        %(highest)s, %(lowest)s, %(volume)s, %(market_value)s, 
+                        %(timestamp)s, %(href)s, %(list)s)
+                ON CONFLICT (name, timestamp) 
+                DO UPDATE SET
+                    last_price = EXCLUDED.last_price,
+                    change_abs = EXCLUDED.change_abs,
+                    change_pct = EXCLUDED.change_pct,
+                    highest = EXCLUDED.highest,
+                    lowest = EXCLUDED.lowest,
+                    volume = EXCLUDED.volume,
+                    market_value = EXCLUDED.market_value,
+                    href = EXCLUDED.href,
+                    list = EXCLUDED.list
+            """, trading_data)
+            self.conn.commit()
+            return len(trading_data)
+    
+    def bulk_insert_historical(self, historical_data: List[Dict[str, Any]]) -> int:
+        """Bulk insert historical data."""
+        if not historical_data:
+            return 0
+        
+        with self.conn.cursor() as cur:
+            cur.executemany("""
+                INSERT INTO stock_historical
+                    (name, year_high, date_year_high, period_1d, period_1m, 
+                     period_ytd, period_1y, timestamp, list)
+                VALUES (%(name)s, %(year_high)s, %(date_year_high)s, %(change_1d)s, 
+                        %(change_1m)s, %(change_in_y)s, %(change_1y)s, %(timestamp)s, %(list)s)
+                ON CONFLICT (name, timestamp)
+                DO UPDATE SET
+                    year_high = EXCLUDED.year_high,
+                    date_year_high = EXCLUDED.date_year_high,
+                    period_1d = EXCLUDED.period_1d,
+                    period_1m = EXCLUDED.period_1m,
+                    period_ytd = EXCLUDED.period_ytd,
+                    period_1y = EXCLUDED.period_1y,
+                    list = EXCLUDED.list
+            """, historical_data)
+            self.conn.commit()
+            return len(historical_data)
+    
+    def bulk_insert_metrics(self, metrics_data: List[Dict[str, Any]]) -> int:
+        """Bulk insert metrics data."""
+        if not metrics_data:
+            return 0
+        
+        with self.conn.cursor() as cur:
+            cur.executemany("""
+                INSERT INTO stock_metrics
+                    (name, pe_ratio, ps_ratio, earning_per_share, equity_per_share,
+                     dividend_yield, direct_return, timestamp, list)
+                VALUES (%(name)s, %(pe_ratio)s, %(ps_ratio)s, %(earning_per_share)s,
+                        %(equity_per_share)s, %(dividend_yield)s, %(direct_return)s,
+                        %(timestamp)s, %(list)s)
+                ON CONFLICT (name, timestamp)
+                DO UPDATE SET
+                    pe_ratio = EXCLUDED.pe_ratio,
+                    ps_ratio = EXCLUDED.ps_ratio,
+                    earning_per_share = EXCLUDED.earning_per_share,
+                    equity_per_share = EXCLUDED.equity_per_share,
+                    dividend_yield = EXCLUDED.dividend_yield,
+                    direct_return = EXCLUDED.direct_return,
+                    list = EXCLUDED.list
+            """, metrics_data)
+            self.conn.commit()
+            return len(metrics_data)

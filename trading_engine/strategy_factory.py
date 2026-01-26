@@ -22,7 +22,6 @@ class StrategyFactory:
 
         for module_info in pkgutil.iter_modules(strategies.__path__):
             module_name = module_info.name
-            print(module_name)
             # Skip base module
             if module_name == "base":
                 continue

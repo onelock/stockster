@@ -178,3 +178,10 @@ load_csv_to_db.py
 migrate_sqlite_to_postgres.py
 analysis/volatility.py
 ZZ_Chat.steps
+
+
+# Markdown files
+ALEMBIC_SETUP_COMPLETE.md
+MIGRATIONS.md
+QUICK_START_API.md
+SCRAPER_API_INTEGRATION.md

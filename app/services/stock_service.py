@@ -103,3 +103,18 @@ class StockService:
         """Get database statistics."""
         stats = self.repository.get_database_stats()
         return DatabaseStats(**stats)
+    
+    def bulk_insert_data(self, trading_data: List[dict], 
+                        historical_data: List[dict], 
+                        metrics_data: List[dict]) -> dict:
+        """Bulk insert stock data from scraper."""
+        trading_count = self.repository.bulk_insert_trading(trading_data)
+        historical_count = self.repository.bulk_insert_historical(historical_data)
+        metrics_count = self.repository.bulk_insert_metrics(metrics_data)
+        
+        return {
+            "trading_inserted": trading_count,
+            "historical_inserted": historical_count,
+            "metrics_inserted": metrics_count,
+            "total_inserted": trading_count + historical_count + metrics_count
+        }
