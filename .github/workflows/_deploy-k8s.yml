@@ -35,7 +35,7 @@ on:
         required: true
       postgres_password:
         required: true
-      github_token:
+      gh_token:
         required: true
 
 jobs:
@@ -65,7 +65,7 @@ jobs:
           kubectl create secret docker-registry ghcr-secret \
             --docker-server=${{ inputs.registry }} \
             --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.github_token }} \
+            --docker-password=${{ secrets.gh_token }} \
             --namespace=${{ inputs.namespace }} \
             --dry-run=client -o yaml | kubectl apply -f -
           
