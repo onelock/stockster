@@ -113,7 +113,7 @@ jobs:
       image_tag: ${{ needs.detect-changes.outputs.image_tag }}
       registry: ghcr.io
     secrets: inherit
-      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }
   
   build-api:
     name: Build API
@@ -127,7 +127,7 @@ jobs:
       image_tag: ${{ needs.detect-changes.outputs.image_tag }}
       registry: ghcr.io
     secrets: inherit
-      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }
   
   build-scraper:
     name: Build Scraper
@@ -141,7 +141,7 @@ jobs:
       image_tag: ${{ needs.detect-changes.outputs.image_tag }}
       registry: ghcr.io
     secrets: inherit
-      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }
 
   # =============================================================================
   # PHASE 3: Deploy to Kubernetes (Gated by Build Success)
@@ -163,6 +163,6 @@ jobs:
       api_changed: ${{ needs.detect-changes.outputs.api_changed == 'true' }}
       registry: ghcr.io
     secrets: inherit
-      # kube_config: ${{ secrets.KUBE_CONFIG }}
-      # postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
-      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # kube_config: ${{ secrets.KUBE_CONFIG }
+      # postgres_password: ${{ secrets.POSTGRES_PASSWORD }
+      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }
