@@ -112,8 +112,8 @@ jobs:
       image_name: stockster-dashboard
       image_tag: ${{ needs.detect-changes.outputs.image_tag }}
       registry: ghcr.io
-    secrets:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    secrets: inherit
+      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
   build-api:
     name: Build API
@@ -126,8 +126,8 @@ jobs:
       image_name: stockster-api
       image_tag: ${{ needs.detect-changes.outputs.image_tag }}
       registry: ghcr.io
-    secrets:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    secrets: inherit
+      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   
   build-scraper:
     name: Build Scraper
@@ -140,8 +140,8 @@ jobs:
       image_name: stockster-scraper
       image_tag: ${{ needs.detect-changes.outputs.image_tag }}
       registry: ghcr.io
-    secrets:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    secrets: inherit
+      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # =============================================================================
   # PHASE 3: Deploy to Kubernetes (Gated by Build Success)
@@ -162,7 +162,7 @@ jobs:
       dashboard_changed: ${{ needs.detect-changes.outputs.dashboard_changed == 'true' }}
       api_changed: ${{ needs.detect-changes.outputs.api_changed == 'true' }}
       registry: ghcr.io
-    secrets:
-      kube_config: ${{ secrets.KUBE_CONFIG }}
-      postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    secrets: inherit
+      # kube_config: ${{ secrets.KUBE_CONFIG }}
+      # postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
+      # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
