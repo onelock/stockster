@@ -127,8 +127,9 @@ jobs:
       
       - name: Setup kubectl
         uses: ./.github/actions/setup-kubectl
-        with:
-          kube_config: ${{ secrets.kube_config }}
+        # with:
+          # kube_config: ${{ secrets.kube_config }
+
       
       - name: Verify resources
         run: |
