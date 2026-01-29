@@ -9,8 +9,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY app/requirements_api.txt migrations/requirements_mrg.txt .
-RUN pip install --no-cache-dir -r requirements_api.txt -r requirements_mrg.txt
+COPY app/requirements_api.txt .
+COPY migrations/requirements_mrg.txt .
+RUN pip install --no-cache-dir -r requirements_api.txt
+RUN pip install --no-cache-dir -r requirements_mrg.txt
 
 
 # Copy application code
