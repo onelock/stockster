@@ -18,8 +18,8 @@ COPY app/ ./app/
 
 # Copy Alembic migrations
 COPY migrations/ ./migrations/
-COPY alembic.ini .
 COPY run_migrations.py .
+COPY alembic.ini .
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

@@ -20,8 +20,8 @@ COPY app/ ./app/
 RUN mkdir -p /data
 
 # Set environment variables
-ENV PYTHONUNBUFFERED=1
 ENV ENVIRONMENT=production
+ENV PYTHONUNBUFFERED=1
 
 # Expose port
 EXPOSE 8501

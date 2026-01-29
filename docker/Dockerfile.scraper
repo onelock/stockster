@@ -1,6 +1,7 @@
 # STRICTLY match the tag to your python library version
 FROM mcr.microsoft.com/playwright/python:v1.57.0-jammy
 
+# working directory
 WORKDIR /app
 
 # Install dependencies
