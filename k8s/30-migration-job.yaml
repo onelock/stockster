@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: stockster-migration
+  name: migration
   namespace: stockster
   labels:
     app: stockster
@@ -22,6 +22,9 @@ spec:
     spec:
       restartPolicy: Never
       
+      # GitHub Container Registry authentication
+      
+      
       # Security context
       securityContext:
         runAsNonRoot: true
@@ -32,16 +35,28 @@ spec:
       initContainers:
       - name: wait-for-postgres
         image: postgres:16-alpine
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_HOST
         command:
         - sh
         - -c
         - |
           set -e
           echo "⏳ Waiting for PostgreSQL to be ready..."
+          echo "📍 Connecting to: $POSTGRES_HOST:5432"
           MAX_ATTEMPTS=30
           ATTEMPT=0
           
-          until pg_isready -h $(PG_HOST) -p $PG_PORT -U $(PG_USER); do
+          until pg_isready -h "$POSTGRES_HOST" -p 5432 -U "$POSTGRES_USER"; do
             ATTEMPT=$((ATTEMPT + 1))
             if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
               echo "❌ PostgreSQL failed to become ready after $MAX_ATTEMPTS attempts"
@@ -52,30 +67,19 @@ spec:
           done
           
           echo "✅ PostgreSQL is ready!"
-        env:
-        - name: PG_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: password
         securityContext:
           allowPrivilegeEscalation: false
-      
+
       containers:
       - name: alembic-migrate
-        image: localhost:5000/stockster-api:latest
+        image: ghcr.io/onelock/stockster-api:latest
         imagePullPolicy: Always
         command:
         - /bin/sh
         - -c
         - |
           set -e  # Exit on error
-          
-          echo "🚀 Starting database migration..."
           echo "================================================"
-          echo "📍 Database: $PG_HOST:$PB_PORT/$PG_DB"
-          echo ""
-          
           # Use the Python migration runner
           python run_migrations.py
           EXIT_CODE=$?
@@ -95,25 +99,30 @@ spec:
         - name: PG_HOST
           valueFrom:
             configMapKeyRef:
-              name: postgres-db-config
-              key: PG_HOST
+              name: postgres-config
+              key: POSTGRES_HOST
+        - name: PG_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
         - name: PG_DB
           valueFrom:
             configMapKeyRef:
-              name: postgres-db-config
-              key: PG_DB
-        - name: PG_PORT
-          valueFrom:
-            configMapKeyRef:
-              name: postgres-db-config
-              key: PG_PORT
+              name: postgres-config
+              key: POSTGRES_DB
         - name: PG_PASSWORD
           valueFrom:
             secretKeyRef:
               name: postgres-secret
-              key: password
+              key: POSTGRES_PASSWORD
+        - name: PG_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_PORT
         - name: DATABASE_URL
-          value: postgresql://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST):$(PG_PORT)/$(PG_PB)
+          value: postgresql://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST):$(PG_PORT)/$(PG_DB)
         resources:
           requests:
             memory: "128Mi"
@@ -124,3 +133,6 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false  # Alembic needs to write temp files
+      
+      imagePullSecrets:
+      - name: ghcr-secret
