@@ -16,7 +16,6 @@ RUN pip install --no-cache-dir -r requirements_api.txt
 RUN pip install --no-cache-dir -r requirements_mrg.txt
 
 # Make Change to trigger rebuild
-RUN echo "Rebuild Trigger"
 # Copy application code
 COPY app/ ./app/
 
