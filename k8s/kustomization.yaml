@@ -6,7 +6,6 @@ namespace: stockster
 resources:
   # --- Phase 1: Base & Configuration ---
   - 00-namespace.yaml
-  - 10-postgres-secret.yaml
   - 11-postgres-config.yaml
   # - 12-scraper-config.yaml
   # - 15-pvc.yaml
