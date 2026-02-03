@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      skip_deploy:
+        description: 'Skip deployment to Kubernetes'
+        required: false
+        type: boolean
+        default: true
 
 # Prevent concurrent deployments to staging
 concurrency:
@@ -157,7 +164,8 @@ jobs:
       always() &&
       needs.create-deployment-plan.outputs.anything_to_deploy == 'true' &&
       !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled')
+      !contains(needs.*.result, 'cancelled') &&
+      github.event.inputs.skip_deploy != 'true'
     uses: ./.github/workflows/_deploy-k8s.yml
     with:
       environment: staging
