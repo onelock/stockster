@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements_scraper.txt
 
 # Create data directory with write permissions for any user
 RUN mkdir -p /data && chmod 777 /data
+RUN echo "Playwright browsers installed."
 
 # Set environment variables
 ENV CSV_OUTPUT_DIR=/data

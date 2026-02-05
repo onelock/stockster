@@ -7,7 +7,7 @@ resources:
   # --- Phase 1: Base & Configuration ---
   - 00-namespace.yaml
   - 11-postgres-config.yaml
-  # - 12-scraper-config.yaml
+  - 12-scraper-config.yaml
   # - 15-pvc.yaml
   
   # --- Phase 2: State (Database) ---
@@ -17,7 +17,7 @@ resources:
   # - 30-migration-job.yaml
 
   # --- Phase 4: Applications ---
-  # - 40-api.yaml
+  - 40-api.yaml
   # - 41-dashboard.yaml
 
   # --- Phase 5: Background Tasks ---

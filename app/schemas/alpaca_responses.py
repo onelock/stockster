@@ -3,7 +3,6 @@ Pydantic response schemas for Alpaca API endpoints.
 """
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from datetime import datetime
 from .alpaca_models import AlpacaBar, AlpacaOHLCAggregated, AlpacaVolumeData
 
 
@@ -57,7 +56,6 @@ class AlpacaSearchResponse(BaseModel):
                 "symbols": ["AAPL", "AAP"]
             }
         }
-
 
 class AlpacaDatabaseStats(BaseModel):
     """Alpaca database statistics"""

@@ -121,7 +121,6 @@ class AlpacaStocks(BaseModel):
             }
         }
 
-
 class StockTradingBulkInsert(BaseModel):
     """Bulk insert request for trading data"""
     timestamp: str = Field(..., description="Data timestamp")

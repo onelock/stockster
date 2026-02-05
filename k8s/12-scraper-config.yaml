@@ -6,38 +6,61 @@ metadata:
 data:
   scrape_di.py: |
     """DI Stock Scraper - Fetches stock data from di.se"""
-    from playwright.sync_api import sync_playwright
+    import asyncio
+    from playwright.async_api import async_playwright
     import datetime
     import os
     import csv
-    import time
     from urllib.parse import urljoin
+    import requests
+    import re
 
     CSV_OUTPUT_DIR = os.getenv('CSV_OUTPUT_DIR', '/data')
     BASE_URL = "https://www.di.se/bors/aktier/"
+    API_URL = os.getenv('API_URL', 'http://localhost:8000/api/v1')
+    API_ENABLED = os.getenv('API_ENABLED', 'true').lower() == 'false'
+    WRITE_TO_CSV_ENABLED=os.getenv('WRITE_TO_CSV_ENABLED', 'true').lower() == 'true'
+
+    FLOAT_CLEANING_REGEX = re.compile(r'[,\s\xa0%]|kr')
+    INTEGER_CLEANING_REGEX = re.compile(r'[,\s\xa0]')
+    FLOAT_CLEANING_LAMBDA = lambda m: '.' if m.group() == ',' else ''
 
     def clean_number(s):
-        if not s or s == '-':
-            return None
-        s = s.replace(',', '.').replace(' ', '').replace('\xa0', '')
-        s = s.replace('%', '').replace('kr', '').strip()
+        if s is None: return None
         try:
-            return float(s)
-        except:
+            cleaned = FLOAT_CLEANING_REGEX.sub(FLOAT_CLEANING_LAMBDA, s)
+            return float(cleaned)
+        except (ValueError, TypeError):
             return None
 
     def clean_integer(s):
-        if not s or s == '-':
-            return None
-        s = s.replace(',', '').replace(' ', '').replace('\xa0', '').strip()
+        if s is None: return None
         try:
-            return int(s)
-        except:
+            cleaned = INTEGER_CLEANING_REGEX.sub('', s)
+            return int(cleaned)
+        except (ValueError, TypeError):
             return None
+        
+        
+    def build_file_path(file_type: str, extension: str = "csv") -> str:
+        """Build file path for output files"""
+        now = datetime.datetime.now() 
+        
+        year = now.strftime("%Y") 
+        month = now.strftime("%m") 
+        day = now.strftime("%d") 
+        timestamp = now.strftime("%Y-%m-%d_%H-%M")
+        
+        folder_path = os.path.join(CSV_OUTPUT_DIR, year, month, day)
+        os.makedirs(folder_path, exist_ok=True)
+        filename = f"{file_type}_{timestamp}.{extension}"
+        
+        return os.path.join(folder_path, filename)
 
-    def write_to_csv(dir, data, filename, mode='a'):
+
+    def write_to_csv(data, filename, mode='a'):
         """Write data to CSV file"""
-        csv_file = os.path.join(dir, filename)
+        csv_file = build_file_path(filename)
         with open(csv_file, mode, newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=data[0].keys())
             if mode == 'w' or not os.path.exists(csv_file):
@@ -45,238 +68,146 @@ data:
             writer.writerows(data)
         print(f"✅ {'Created' if mode == 'w' else 'Appended'} {len(data)} records → {csv_file}")
 
-    def scroll_to_load_all(page, max_scrolls=20, scroll_pause=1):
-        """
-        Scroll page incrementally to trigger lazy loading.
-        Stops when no new content appears.
-        """
-        print("  🔄 Scrolling to load all content...")
-        
-        last_height = page.evaluate("document.body.scrollHeight")
-        scroll_count = 0
-        no_change_count = 0
-        
-        while scroll_count < max_scrolls:
-            # Scroll to bottom
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            
-            # Wait for potential lazy load
-            page.wait_for_timeout(scroll_pause * 1000)
-            
-            # Check if new content loaded
-            new_height = page.evaluate("document.body.scrollHeight")
-            
-            if new_height == last_height:
-                no_change_count += 1
-                if no_change_count >= 3:
-                    print(f"  ✅ Content fully loaded after {scroll_count + 1} scrolls")
-                    break
-            else:
-                no_change_count = 0
-            
-            last_height = new_height
-            scroll_count += 1
-        
-        return scroll_count
-
-    def scrape_tables_from_page(page, page_name, list_name):
-        """
-        Scrape all tables from the current page.
-        Returns dict with table data organized by table index.
-        """
-        print(f"\n{'='*60}")
-        print(f"📄 Scraping page: {page_name} (List: {list_name})")
-        print(f"{'='*60}")
-        
-        # Wait for tables to load
+    def send_to_api(trading_data, historical_data, metrics_data):
+        """Send scraped data to API"""
         try:
-            page.wait_for_selector("table", timeout=1000)
-        except:
-            print("  ⚠️  No tables found on this page")
-            return {}
-        
-        # Scroll to load all content
-        scroll_to_load_all(page, max_scrolls=20, scroll_pause=1)
-        
-        # Find all tables
-        tables = page.query_selector_all("table[data-tab]")
-        print(f"  📊 Found {len(tables)} tables")
-        
-        page_data = {}
-        
-        for table_idx in range(3):  # table_0, table_1, table_2
-            table_selector = f'table[data-tab="table_{table_idx}"]'
-            tables = page.query_selector_all(table_selector)
+            api_endpoint = f"{API_URL}/stocks/bulk"
+            payload = {
+                "trading": trading_data,
+                "historical": historical_data,
+                "metrics": metrics_data
+            }
             
-            if not tables:
-                print(f"  ⚠️  table_{table_idx} not found")
-                continue
+            print(f"\n📡 Sending data to API: {api_endpoint}")
+            print(f"   - Trading records: {len(trading_data)}")
+            print(f"   - Historical records: {len(historical_data)}")
+            print(f"   - Metrics records: {len(metrics_data)}")
             
-            table_name = ['Trading', 'Historical', 'Metrics'][table_idx]
-            all_rows = []
+            response = requests.post(
+                api_endpoint, 
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=60
+            )
             
-            for table in tables:
-                rows = table.query_selector_all("tbody tr")
+            if response.status_code == 200:
+                result = response.json()
+                print(f"✅ API Response: {result.get('message', 'Success')}")
+                print(f"   - Trading inserted: {result.get('trading_inserted', 0)}")
+                print(f"   - Historical inserted: {result.get('historical_inserted', 0)}")
+                print(f"   - Metrics inserted: {result.get('metrics_inserted', 0)}")
+                print(f"   - Total inserted: {result.get('total_inserted', 0)}")
+                return True
+            else:
+                print(f"❌ API Error: {response.status_code} - {response.text}")
+                return False
                 
-                for row in rows:
-                    cols = row.query_selector_all("td")
-                    row_data = [col.inner_text().strip() for col in cols]
-                    
-                    if not row_data or len(row_data) < 2:
-                        continue
-                    
-                    # Get href for trading table (table_0)
-                    href = None
-                    if table_idx == 0:
-                        link = row.query_selector("a")
-                        href = link.get_attribute("href") if link else None
-                    
-                    all_rows.append({
-                        'name': row_data[0],
-                        'data': row_data,
-                        'href': href,
-                        'list': list_name  # Add list identifier
-                    })
-            
-            page_data[f'table_{table_idx}'] = all_rows
-            print(f"  ✅ {table_name} (table_{table_idx}): {len(all_rows)} rows")
-        
-        return page_data
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Failed to send data to API: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ Unexpected error sending to API: {e}")
+            return False
 
-    def scrape_disestockdata():
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.set_viewport_size({"width": 1920, "height": 1080})
-            page.set_default_timeout(15000)
+    async def scrape_page_optimized(browser, item):
+        """ Scrape a single list page concurrently with resource blocking """
+        context = await browser.new_context()
+        page = await context.new_page()
+        
+        # Block unnecessary resources
+        await page.route("**/*.{png,jpg,jpeg,svg,gif,css,woff,woff2}", lambda route: route.abort())
+        
+        try:
+            await page.goto(item['href'], wait_until="domcontentloaded")  # noqa: SC200
+            await page.wait_for_timeout(2000)  # Wait for initial content
             
-            try:
-                print(f"📡 Loading {BASE_URL}")
-                page.goto(BASE_URL, wait_until="domcontentloaded")
-                page.wait_for_timeout(1000)
-                print("✅ Initial page loaded")
-            except Exception as e:
-                print(f"❌ Failed to load page: {e}")
-                browser.close()
-                return
-            
-            # Find the submenu
-            print("\n🔍 Looking for submenu (aria-label='Undermeny')...")
-            submenu = page.query_selector('[aria-label="Undermeny"]')
-            
-            if not submenu:
-                print("❌ Submenu not found!")
-                browser.close()
-                return
-            
-            # Get the first 4 links from the submenu
-            menu_links = submenu.query_selector_all("a")[:4]
-            
-            if not menu_links:
-                print("❌ No links found in submenu!")
-                browser.close()
-                return
-            
-            print(f"✅ Found {len(menu_links)} menu items to scrape")
-            
-            # Extract link info before clicking - use inner text as list name
-            menu_items = []
-            for link in menu_links:
-                text = link.inner_text().strip()
-                href = link.get_attribute("href")
-                
-                # Convert relative URL to absolute URL
-                full_url = urljoin(BASE_URL, href)
-                
-                menu_items.append({
-                    'text': text,
-                    'href': full_url,  # Store absolute URL
-                    'list': text  # Use the link text as the list name
-                })
-                print(f"  - List: '{text}' → {full_url}")
-            
-            # Scrape each menu page
-            all_pages_data = {}
-            
-            for idx, item in enumerate(menu_items, 1):
-                print(f"\n{'='*60}")
-                print(f"📑 Menu Item {idx}/{len(menu_items)}: {item['text']}")
-                print(f"{'='*60}")
-                
-                try:
-                    # Navigate to the page
-                    page.goto(item['href'], wait_until="domcontentloaded")
-                    page.wait_for_timeout(2000)
+            data = await page.evaluate("""
+                async () => {
+                    const delay = ms => new Promise(res => setTimeout(res, ms));
+                    let lastCount = 0;
+                    let retries = 0;
+                    let scrollAttempts = 0;
+                    const maxScrollAttempts = 100;
                     
-                    # Scrape tables from this page with list name
-                    page_data = scrape_tables_from_page(page, item['text'], item['list'])
-                    
-                    if page_data:
-                        all_pages_data[item['text']] = {
-                            'data': page_data,
-                            'list': item['list']
+                    // Keep scrolling until no new rows appear for 8 consecutive attempts
+                    while (retries < 8 && scrollAttempts < maxScrollAttempts) {
+                        window.scrollTo(0, document.body.scrollHeight);
+                        await delay(1500);
+                        
+                        // Also scroll to last row to trigger lazy load
+                        const lastRow = document.querySelector('table[data-tab="table_0"] tbody tr:last-child');
+                        if (lastRow) lastRow.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                        await delay(500);
+                        
+                        let currentCount = document.querySelectorAll('table[data-tab="table_0"] tbody tr').length;
+                        scrollAttempts++;
+                        
+                        if (currentCount == lastCount) retries++;
+                        else { 
+                            console.log(`Scroll ${scrollAttempts}: ${currentCount} rows (+${currentCount - lastCount})`);
+                            lastCount = currentCount; 
+                            retries = 0; 
                         }
+                    }
                     
-                except Exception as e:
-                    print(f"  ❌ Error scraping {item['text']}: {e}")
-                    continue
-            
-            browser.close()
+                    console.log(`Final: ${lastCount} rows after ${scrollAttempts} scrolls`);
+                    
+                    const extract = (tabId) => { 
+                        return Array.from(document.querySelectorAll(`table[data-tab="${tabId}"] tbody tr`)).map(row => {
+                            const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                            const link = row.querySelector('a');
+                            return {
+                                name: cells[0],
+                                data: cells,
+                                href: link ? link.getAttribute('href') : null,
+                            };
+                        });
+                    };
+                    return {
+                        table_0: extract('table_0'),
+                        table_1: extract('table_1'),
+                        table_2: extract('table_2'),
+                    };
+                }
+            """)
         
-        # Process and save all collected data
-        print(f"\n{'='*60}")
-        print("💾 Processing collected data...")
-        print(f"{'='*60}")
-        
+            await context.close()
+            return {item['text']: {'data': data, 'list': item['text']}}
+        except Exception as e:
+            print(f"  ❌ Error scraping {item['text']}: {e}")
+            await context.close()
+            return {}
+
+
+    def process_and_send(all_pages_data):
         timestamp = datetime.datetime.today().strftime('%Y-%m-%d')
         os.makedirs(CSV_OUTPUT_DIR, exist_ok=True)
         
         # Combine data from all pages
-        all_trading_data = []
-        all_historical_data = []
-        all_metrics_data = []
+        all_trading = []
+        all_historical = []
+        all_metrics = []
         
-        # Expected counts per list
-        expected_counts = {
-            menu_items[0]['list']: 160,
-            menu_items[1]['list']: 139,
-            menu_items[2]['list']: 109,
-            menu_items[3]['list']: 354
-        }
-        
-        for page_name, page_info in all_pages_data.items():
-            page_data = page_info['data']
-            list_name = page_info['list']
+        for list_name, info in all_pages_data.items():
+            data = info['data']
             
-            print(f"\n📄 Processing: {page_name} (List: {list_name})")
+            hist_lookup = {row['name']: row for row in data.get('table_1', [])}
+            metr_lookup = {row['name']: row for row in data.get('table_2', [])}
             
-            trading_rows = page_data.get('table_0', [])
-            historical_rows = page_data.get('table_1', [])
-            metrics_rows = page_data.get('table_2', [])
-            
-            # Verify expected count
-            expected = expected_counts.get(list_name, 0)
-            actual = len(trading_rows)
-            status = "✅" if actual == expected else "⚠️"
-            print(f"  {status} Expected {expected} stocks, got {actual}")
-            
-            # Create lookup dicts for matching
-            historical_dict = {row['name']: row for row in historical_rows}
-            metrics_dict = {row['name']: row for row in metrics_rows}
-            
-            # Process trading data and match with other tables
-            for trading_row in trading_rows:
-                stock_name = trading_row['name']
-                t = trading_row['data']
-                href = trading_row['href']
-                stock_list = trading_row['list']
+            for stock in data.get('table_0', []):
+                name =  stock['name']
+                t = stock['data']
+                href = stock['href']
+                
+                t_time = t[-1] if len(t) >= 8 else '00:00'
+                iso_ts = f'{timestamp}T{t_time}:00'
                 
                 # Add list to data
                 if len(t) >= 8:
-                    all_trading_data.append({
-                        'timestamp': f'{timestamp}T{t[-1]}:00',
-                        'list': stock_list,
-                        'name': t[0],
+                    all_trading.append({
+                        'timestamp': iso_ts,
+                        'list': list_name,
+                        'name': name,
                         'last_price': clean_number(t[1]),
                         'change_abs': clean_number(t[2]),
                         'change_pct': clean_number(t[3]),
@@ -288,71 +219,96 @@ data:
                     })
                 
                 # Match historical data
-                if stock_name in historical_dict:
-                    h = historical_dict[stock_name]['data']
-                    if len(h) >= 7:
-                        t_time = t[-1] if len(t) >= 8 else '00:00'
-                        all_historical_data.append({
-                            'timestamp': f'{timestamp}T{t_time}:00',
-                            'list': stock_list,
-                            'name': h[0],
-                            'year_high': clean_number(h[1]),
-                            'date_year_high': clean_number(h[2]),
-                            'change_1d': clean_number(h[3]),
-                            'change_1m': clean_number(h[4]),
-                            'change_in_y': clean_number(h[5]),
-                            'change_1y': clean_number(h[6])
-                        })
+                h = hist_lookup.get(name)
+                h_data = h['data'] if h else []
+                if len(h_data) >= 8:
+                    all_historical.append({
+                        'timestamp': iso_ts,
+                        'list': list_name,
+                        'name': name,
+                        'ATH': clean_number(h_data[2]),
+                        'date_ATH': h_data[3],
+                        'change_1d': clean_number(h_data[4]),
+                        'change_1m': clean_number(h_data[5]),
+                        'change_in_y': clean_number(h_data[6]),
+                        'change_1y': clean_number(h_data[7])
+                    })
                 
                 # Match metrics data
-                if stock_name in metrics_dict:
-                    m = metrics_dict[stock_name]['data']
-                    if len(m) >= 7:
-                        t_time = t[-1] if len(t) >= 8 else '00:00'
-                        all_metrics_data.append({
-                            'timestamp': f'{timestamp}T{t_time}:00',
-                            'list': stock_list,
-                            'name': m[0],
-                            'pe_ratio': clean_number(m[1]),
-                            'ps_ratio': clean_number(m[2]),
-                            'earning_per_share': clean_number(m[3]),
-                            'equity_per_share': clean_number(m[4]),
-                            'dividend_yield': clean_number(m[5]),
-                            'direct_return': clean_number(m[6])
-                        })
+                m = metr_lookup.get(name)
+                m_data = m['data'] if m else []
+                if len(m_data) >= 8:
+                    all_metrics.append({
+                        'timestamp': iso_ts,
+                        'list': list_name,
+                        'name': name,
+                        'pe_ratio': clean_number(m_data[2]),
+                        'ps_ratio': clean_number(m_data[3]),
+                        'earning_per_share': clean_number(m_data[4]),
+                        'equity_per_share': clean_number(m_data[5]),
+                        'dividend_yield': clean_number(m_data[6]),
+                        'direct_return': clean_number(m_data[7])
+                    })
+                    
+        # Send to API if enabled
+        if API_ENABLED and all_trading:
+            api_success = send_to_api(all_trading, all_historical, all_metrics)
+            
+            if not api_success:
+                print("⚠️  API upload failed, falling back to CSV")
+        else:
+            print(f"\n⚠️  API disabled (API_ENABLED={API_ENABLED}), writing to CSV only")
         
-        # Count stocks per list in final data
-        print(f"\n{'='*60}")
-        print("📊 Final Data Summary by List:")
-        print(f"{'='*60}")
-        
-        from collections import Counter
-        trading_counts = Counter(row['list'] for row in all_trading_data)
-        for list_name, count in trading_counts.items():
-            expected = expected_counts.get(list_name, 0)
-            status = "✅" if count == expected else "⚠️"
-            print(f"  {status} {list_name}: {count} stocks (expected: {expected})")
-        
-        print(f"\nTotal stocks: {len(all_trading_data)}")
-        print(f"Expected total: {sum(expected_counts.values())}")
+        # Write CSV files (always write as backup or if API disabled)
+        print(f"\n📤 Writing CSV files (backup)...")
         print(f"{'='*90}")
         
-        # Write CSV files (OVERWRITE mode to avoid duplicates)
-        print(f"\n💾 Writing CSV files (overwrite mode)...")
-        print(f"{'='*90}")
-        
-        if all_trading_data:
-            write_to_csv(CSV_OUTPUT_DIR, all_trading_data, 'all_stocks_trading.csv')
-        
-        if all_historical_data:
-            write_to_csv(CSV_OUTPUT_DIR, all_historical_data, 'all_stocks_historical.csv')
-        
-        if all_metrics_data:
-            write_to_csv(CSV_OUTPUT_DIR, all_metrics_data, 'all_stocks_metrics.csv')
-        
-        print(f"\n{'='*90}")
-        print("✅ SCRAPING COMPLETE!")
-        print(f"{'='*90}")
+        if WRITE_TO_CSV_ENABLED:
+            file_ts = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
+            
+            if all_trading: write_to_csv(all_trading, f'trading_{file_ts}.csv')
+            
+            if all_historical: write_to_csv(all_historical, f'historical_{file_ts}.csv')
+            
+            if all_metrics: write_to_csv(all_metrics, f'metrics_{file_ts}.csv')
+                
+        print(f"✅ Processed {len(all_trading)} total stocks across {len(all_pages_data)} lists.")
+
+    async def main():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            
+            print(f"📡 Navigating to {BASE_URL}...")
+            await page.goto(BASE_URL, wait_until="domcontentloaded")
+            
+            submenu = await page.query_selector('[aria-label="Undermeny"]')
+            links = await submenu.query_selector_all("a")
+            
+            # Extract link info before clicking - use inner text as list name
+            menu_items = []
+            for link in links[:5]:
+                text = await link.inner_text()
+                href = await link.get_attribute("href")
+                menu_items.append({'text': text.strip(),'href': urljoin(BASE_URL, href)})
+                
+            print(f"🚀 Starting parallel scrape of {len(menu_items)} list...")
+            sem = asyncio.Semaphore(5)  # Limit concurrency
+            
+            async def throttled_scrape(item):
+                async with sem:
+                    return await scrape_page_optimized(browser, item)
+                
+            tasks = [throttled_scrape(item) for item in menu_items]
+            results = await asyncio.gather(*tasks)
+            
+            await browser.close()
+            
+            all_pages_data = {k: v for d in results for k, v in d.items()}
+            process_and_send(all_pages_data)
 
     if __name__ == "__main__":
-        scrape_disestockdata()
+        import time
+        st = time.time()
+        asyncio.run(main())
+        print(f"⏱️  Total runtime: {time.time() - st:.2f} seconds")

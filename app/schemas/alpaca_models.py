@@ -3,8 +3,6 @@ Pydantic models for Alpaca stock data.
 """
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
-
 
 class AlpacaBar(BaseModel):
     """OHLCV bar data from Alpaca"""

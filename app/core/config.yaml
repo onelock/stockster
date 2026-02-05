@@ -3,9 +3,13 @@
 
 development:
   database:
-    type: sqlite
-    path: ../db/stocks_db.db
-    timeout: 10.0
+    type: postgresql
+    host: ${PG_HOST:localhost}
+    port: ${PG_PORT:5432}
+    database: ${PG_DB:stocksterdb}
+    user: ${PG_USER:stockster}
+    password: ${PG_PASSWORD:stockster123}
+    connect_timeout: 10
 
 production:
   database:
