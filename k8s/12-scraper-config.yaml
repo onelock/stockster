@@ -132,7 +132,7 @@ data:
                     // Keep scrolling until no new rows appear for 8 consecutive attempts
                     while (retries < 8 && scrollAttempts < maxScrollAttempts) {
                         window.scrollTo(0, document.body.scrollHeight);
-                        await delay(1500);
+                        await delay(500);
                         
                         // Also scroll to last row to trigger lazy load
                         const lastRow = document.querySelector('table[data-tab="table_0"] tbody tr:last-child');
