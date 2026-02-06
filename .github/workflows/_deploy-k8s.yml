@@ -80,7 +80,7 @@ jobs:
           kubectl create secret generic postgres-secret \
             --from-literal=username=${{ secrets.postgres_user }} \
             --from-literal=password=${{ secrets.postgres_password }} \
-            --from-literal=database=${{ secrets.POSTGRES_DB }} \
+            --from-literal=database=${{ secrets.postgres_db }} \
             --from-literal=host=${{ secrets.POSTGRES_HOST}} \
             --from-literal=port=5432 \
             --namespace=${{ inputs.namespace }} \
