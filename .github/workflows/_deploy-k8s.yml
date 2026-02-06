@@ -42,7 +42,7 @@ on:
         required: true
       GH_TOKEN:
         required: true
-
+      
 jobs:
 
 
@@ -58,7 +58,7 @@ jobs:
         uses: ./.github/actions/setup-kubectl
         with:
           kube_config: ${{ secrets.kube_config }}
-      
+
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
@@ -80,8 +80,8 @@ jobs:
           kubectl create secret generic postgres-secret \
             --from-literal=username=${{ secrets.postgres_user }} \
             --from-literal=password=${{ secrets.postgres_password }} \
-            --from-literal=database=${{ secrets.postgres_db }} \
-            --from-literal=host=${{ secrets.postgres_host }} \
+            --from-literal=database=${{ secrets.POSTGRES_DB }} \
+            --from-literal=host=${{ secrets.POSTGRES_HOST}} \
             --from-literal=port=5432 \
             --namespace=${{ inputs.namespace }} \
             --dry-run=client -o yaml | kubectl apply -f -
