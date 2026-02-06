@@ -65,7 +65,7 @@ metadata:
   name: stockster-api
   namespace: stockster
 spec:
-  type: LoadBalancer  # Or ClusterIP with Ingress trigger making ,oves
+  type: LoadBalancer  # Or ClusterIP with Ingress trigger making moves
   ports:
   - port: 80
     targetPort: 8000
