@@ -10,12 +10,15 @@ import re
 CSV_OUTPUT_DIR = os.getenv('CSV_OUTPUT_DIR', '/data')
 BASE_URL = "https://www.di.se/bors/aktier/"
 API_URL = os.getenv('API_URL', 'http://localhost:8000/api/v1')
-API_ENABLED = os.getenv('API_ENABLED', 'true').lower() == 'false'
+API_ENABLED = os.getenv('API_ENABLED', 'true').lower() == 'true'
 WRITE_TO_CSV_ENABLED=os.getenv('WRITE_TO_CSV_ENABLED', 'true').lower() == 'true'
 
 FLOAT_CLEANING_REGEX = re.compile(r'[,\s\xa0%]|kr')
 INTEGER_CLEANING_REGEX = re.compile(r'[,\s\xa0]')
 FLOAT_CLEANING_LAMBDA = lambda m: '.' if m.group() == ',' else ''
+
+MARKET_LIST_LIMIT = 5
+CONCURRENT_SCRAPE_LIMIT = 5
 
 def clean_number(s):
     if s is None: return None
@@ -41,11 +44,10 @@ def build_file_path(file_type: str, extension: str = "csv") -> str:
     year = now.strftime("%Y") 
     month = now.strftime("%m") 
     day = now.strftime("%d") 
-    timestamp = now.strftime("%Y-%m-%d_%H-%M")
     
     folder_path = os.path.join(CSV_OUTPUT_DIR, year, month, day)
     os.makedirs(folder_path, exist_ok=True)
-    filename = f"{file_type}_{timestamp}.{extension}"
+    filename = f"{file_type}.{extension}"
     
     return os.path.join(folder_path, filename)
 
@@ -112,7 +114,7 @@ async def scrape_page_optimized(browser, item):
     try:
         await page.goto(item['href'], wait_until="domcontentloaded")  # noqa: SC200
         await page.wait_for_timeout(2000)  # Wait for initial content
-        
+            
         data = await page.evaluate("""
             async () => {
                 const delay = ms => new Promise(res => setTimeout(res, ms));
@@ -124,7 +126,7 @@ async def scrape_page_optimized(browser, item):
                 // Keep scrolling until no new rows appear for 8 consecutive attempts
                 while (retries < 8 && scrollAttempts < maxScrollAttempts) {
                     window.scrollTo(0, document.body.scrollHeight);
-                    await delay(1500);
+                    await delay(500);
                     
                     // Also scroll to last row to trigger lazy load
                     const lastRow = document.querySelector('table[data-tab="table_0"] tbody tr:last-child');
@@ -141,8 +143,6 @@ async def scrape_page_optimized(browser, item):
                         retries = 0; 
                     }
                 }
-                
-                console.log(`Final: ${lastCount} rows after ${scrollAttempts} scrolls`);
                 
                 const extract = (tabId) => { 
                     return Array.from(document.querySelectorAll(`table[data-tab="${tabId}"] tbody tr`)).map(row => {
@@ -180,13 +180,21 @@ def process_and_send(all_pages_data):
     all_historical = []
     all_metrics = []
     
+    
     for list_name, info in all_pages_data.items():
         data = info['data']
         
         hist_lookup = {row['name']: row for row in data.get('table_1', [])}
         metr_lookup = {row['name']: row for row in data.get('table_2', [])}
         
+        
+        seen = set()
         for stock in data.get('table_0', []):
+            if stock['name'] in seen:
+                continue
+            
+            seen.add(stock['name'])
+            
             name =  stock['name']
             t = stock['data']
             href = stock['href']
@@ -218,12 +226,12 @@ def process_and_send(all_pages_data):
                     'timestamp': iso_ts,
                     'list': list_name,
                     'name': name,
-                    'ATH': clean_number(h_data[2]),
-                    'date_ATH': h_data[3],
-                    'change_1d': clean_number(h_data[4]),
-                    'change_1m': clean_number(h_data[5]),
-                    'change_in_y': clean_number(h_data[6]),
-                    'change_1y': clean_number(h_data[7])
+                    'ath': clean_number(h_data[2]),
+                    'date_of_ath': h_data[3],
+                    'one_day_change': clean_number(h_data[4]),
+                    'one_month_change': clean_number(h_data[5]),
+                    'year_to_date_change': clean_number(h_data[6]),
+                    'one_year_change': clean_number(h_data[7])
                 })
             
             # Match metrics data
@@ -258,13 +266,14 @@ def process_and_send(all_pages_data):
     if WRITE_TO_CSV_ENABLED:
         file_ts = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
         
-        if all_trading: write_to_csv(all_trading, f'trading_{file_ts}.csv')
+        if all_trading: write_to_csv(all_trading, f'trading_{file_ts}')
         
-        if all_historical: write_to_csv(all_historical, f'historical_{file_ts}.csv')
+        if all_historical: write_to_csv(all_historical, f'historical_{file_ts}')
         
-        if all_metrics: write_to_csv(all_metrics, f'metrics_{file_ts}.csv')
+        if all_metrics: write_to_csv(all_metrics, f'metrics_{file_ts}')
             
     print(f"✅ Processed {len(all_trading)} total stocks across {len(all_pages_data)} lists.")
+    
 
 async def main():
     async with async_playwright() as p:
@@ -279,13 +288,13 @@ async def main():
         
         # Extract link info before clicking - use inner text as list name
         menu_items = []
-        for link in links[:5]:
+        for link in links[:MARKET_LIST_LIMIT]:
             text = await link.inner_text()
             href = await link.get_attribute("href")
             menu_items.append({'text': text.strip(),'href': urljoin(BASE_URL, href)})
             
         print(f"🚀 Starting parallel scrape of {len(menu_items)} list...")
-        sem = asyncio.Semaphore(5)  # Limit concurrency
+        sem = asyncio.Semaphore(CONCURRENT_SCRAPE_LIMIT)  # Limit concurrency
         
         async def throttled_scrape(item):
             async with sem:
