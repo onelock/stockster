@@ -15,7 +15,7 @@ RUN echo "Playwright browsers installed."
 # Set environment variables
 ENV CSV_OUTPUT_DIR=/data
 ENV API_ENABLED=true
-ENV API_URL=http://api-svc
+ENV API_URL=http://api-svc/api/v1
 
 # Ensures that the python output i.e. the stdout and stderr streams are sent straight to terminal (e.g. your container log) without being first buffered 
 ENV PYTHONUNBUFFERED=1  
