@@ -11,11 +11,12 @@ RUN pip install --no-cache-dir -r requirements_scraper.txt
 # Create data directory with write permissions for any user
 RUN mkdir -p /data && chmod 777 /data
 RUN echo "Playwright browsers installed."
-
+RUN echo "Triggering scraper image build. If you see this message, the build context is correct and the Dockerfile is being processed." 
 # Set environment variables
 ENV CSV_OUTPUT_DIR=/data
 ENV API_ENABLED=true
 ENV API_URL=http://api-svc/api/v1
+
 
 # Ensures that the python output i.e. the stdout and stderr streams are sent straight to terminal (e.g. your container log) without being first buffered 
 ENV PYTHONUNBUFFERED=1  

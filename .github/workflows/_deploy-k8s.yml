@@ -25,6 +25,11 @@ on:
         required: false
         type: boolean
         default: false
+      scraper_changed:
+        description: 'Whether scraper was updated'
+        required: false
+        type: boolean
+        default: false
       registry:
         description: 'Container registry'
         required: false
@@ -82,7 +87,11 @@ jobs:
             echo "✓ Updated API tag to $TAG"
           fi
           
-          echo ""
+          if [ "${{ inputs.scraper_changed }}" == "true" ]; then
+            yq eval -i '(.images[] | select(.name == "stockster/scraper") | .newTag) = "'$TAG'"' kustomization.yaml
+            echo "✓ Updated scraper tag to $TAG"
+          fi
+          
           echo "Kustomization configuration:"
           cat kustomization.yaml
       
@@ -102,6 +111,11 @@ jobs:
           if [ "${{ inputs.api_changed }}" == "true" ]; then
             echo "Waiting for API rollout..."
             kubectl rollout status deployment/stockster-api -n ${{ inputs.namespace }} --timeout=5m
+          fi
+          
+          if [ "${{ inputs.scraper_changed }}" == "true" ]; then
+            echo "Waiting for scraper rollout..."
+            kubectl rollout status deployment/stockster-scraper -n ${{ inputs.namespace }} --timeout=5m
           fi
           
           echo "✅ Deployment complete"
@@ -140,6 +154,6 @@ jobs:
           echo "### Image Versions" >> $GITHUB_STEP_SUMMARY
           echo "- **Dashboard**: \`$(kubectl get deployment stockster-dashboard -n ${{ inputs.namespace }} -o jsonpath='{.spec.template.spec.containers[0].image}')\`" >> $GITHUB_STEP_SUMMARY
           echo "- **API**: \`$(kubectl get deployment stockster-api -n ${{ inputs.namespace }} -o jsonpath='{.spec.template.spec.containers[0].image}')\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Scraper**: \`$(kubectl get deployment stockster-scraper -n ${{ inputs.namespace }} -o jsonpath='{.spec.template.spec.containers[0].image}')\`" >> $GITHUB_STEP_SUMMARY
           
           echo "✅ Verification complete" >> $GITHUB_STEP_SUMMARY

@@ -26,7 +26,7 @@ spec:
           
           containers:
           - name: scraper
-            image: ghcr.io/onelock/stockster-scraper:latest
+            image: stockster/scraper
             imagePullPolicy: IfNotPresent
             
             command: ["python", "/app/scrape_di.py"]
