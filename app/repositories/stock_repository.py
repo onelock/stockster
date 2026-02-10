@@ -3,12 +3,11 @@ PostgreSQL repository for stock data access using SQLModel.
 """
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
-from sqlmodel import Session, select, SQLModel
+from sqlmodel import Session, select
 
 from sqlalchemy import func, text
 from sqlalchemy.dialects.postgresql import insert
 
-from dashboard import data
 from ..schemas.models import StockTrading, StockHistorical, StockMetrics
 
 
@@ -123,21 +122,6 @@ class StockRepository:
             return True
         except Exception:
             return False    
-
-    # def bulk_insert(self, model: SQLModel, data: List[Dict[str, Any]],) -> int:
-    #     if not data:
-    #         return 0
-
-    #     stmt = insert(model).values(data)
-    #     upsert_stmt = stmt.on_conflict_do_update(
-    #         index_elements=['name', 'timestamp'],
-    #         set_={c.name: c for c in stmt.excluded if c.name not in ['name', 'timestamp', 'id']}
-    #     )
-
-    #     self.session.exec(upsert_stmt)
-    #     self.session.commit()
-        
-    #     return len(data)
 
     from sqlalchemy.dialects.postgresql import insert
 
