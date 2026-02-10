@@ -62,7 +62,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: stockster-api
+  name: api-svc
   namespace: stockster
 spec:
   type: LoadBalancer  # Or ClusterIP with Ingress trigger making moves
