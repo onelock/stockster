@@ -3,7 +3,8 @@ Dependency injection for the application.
 """
 from typing import Generator
 from fastapi import Depends
-from .database import get_db
+from sqlmodel import Session
+from .database import get_session
 from ..repositories.stock_repository import StockRepository
 from ..repositories.alpaca_repository import AlpacaRepository
 from ..services.stock_service import StockService
@@ -12,13 +13,13 @@ from ..services.alpaca_service import AlpacaService
 
 
 # Repository Dependencies
-def get_stock_repository(conn=Depends(get_db)) -> StockRepository:
+def get_stock_repository(session: Session = Depends(get_session)) -> StockRepository:
     """Provide StockRepository instance."""
-    return StockRepository(conn)
+    return StockRepository(session)
 
-def get_alpaca_repository(conn=Depends(get_db)) -> AlpacaRepository:
+def get_alpaca_repository(session: Session = Depends(get_session)) -> AlpacaRepository:
     """Provide AlpacaRepository instance."""
-    return AlpacaRepository(conn)
+    return AlpacaRepository(session)
 
 # Service Dependencies
 def get_stock_service(

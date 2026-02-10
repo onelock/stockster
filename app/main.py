@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .core.config import settings
-from .core.database import db_pool
+from .core.database import close_db_connections
 from .api.v1.api import api_router
 
 
@@ -14,10 +14,11 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
     # Startup
     print("🚀 Starting Stockster API...")
+    print("📊 Using SQLModel/SQLAlchemy for database operations")
     yield
     # Shutdown
     print("🛑 Shutting down Stockster API...")
-    db_pool.close_all()
+    close_db_connections()
 
 
 # Create FastAPI app

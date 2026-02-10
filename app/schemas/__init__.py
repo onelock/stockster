@@ -6,9 +6,9 @@ from .models import (
     StockTrading,
     StockHistorical,
     StockMetrics,
-    StockTradingBulkInsert,
-    StockHistoricalBulkInsert,
-    StockMetricsBulkInsert,
+    # StockTradingBulkInsert,
+    # StockHistoricalBulkInsert,
+    # StockMetricsBulkInsert,
     BulkInsertRequest
 )
 
