@@ -24,13 +24,12 @@ MANIFEST
 
 # Virtual Environments
 .env
-.stockster_venv
+.*venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
-.stockster_venv/
 
 # PyCharm
 .idea/

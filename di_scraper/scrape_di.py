@@ -10,7 +10,7 @@ import re
 CSV_OUTPUT_DIR = os.getenv('CSV_OUTPUT_DIR', '/data')
 BASE_URL = "https://www.di.se/bors/aktier/"
 API_URL = os.getenv('API_URL', 'http://localhost:8000/api/v1')
-API_ENABLED = os.getenv('API_ENABLED', 'true').lower() == 'true'
+API_ENABLED = os.getenv('API_ENABLED', 'false').lower() == 'true'
 WRITE_TO_CSV_ENABLED=os.getenv('WRITE_TO_CSV_ENABLED', 'true').lower() == 'true'
 
 FLOAT_CLEANING_REGEX = re.compile(r'[,\s\xa0%]|kr')
@@ -19,6 +19,7 @@ FLOAT_CLEANING_LAMBDA = lambda m: '.' if m.group() == ',' else ''
 
 MARKET_LIST_LIMIT = 5
 CONCURRENT_SCRAPE_LIMIT = 5
+
 
 def clean_number(s):
     if s is None: return None
@@ -37,24 +38,31 @@ def clean_integer(s):
         return None
     
     
-def build_file_path(file_type: str, extension: str = "csv") -> str:
+def build_file_path(file_type: str, extension: str = "csv", api_success: bool = False) -> str:
     """Build file path for output files"""
+    
     now = datetime.datetime.now() 
     
     year = now.strftime("%Y") 
     month = now.strftime("%m") 
-    day = now.strftime("%d") 
+    day = now.strftime("%d")
     
-    folder_path = os.path.join(CSV_OUTPUT_DIR, year, month, day)
+    if api_success:
+        base_folder = os.path.join(CSV_OUTPUT_DIR, "archive")
+    else:
+        base_folder = CSV_OUTPUT_DIR
+        
+    folder_path = os.path.join(base_folder, year, month, day)
+    
     os.makedirs(folder_path, exist_ok=True)
     filename = f"{file_type}.{extension}"
     
     return os.path.join(folder_path, filename)
 
 
-def write_to_csv(data, filename, mode='a'):
+def write_to_csv(data, filename, mode='w', api_success=False):
     """Write data to CSV file"""
-    csv_file = build_file_path(filename)
+    csv_file = build_file_path(filename, api_success=api_success)
     with open(csv_file, mode, newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=data[0].keys())
         if mode == 'w' or not os.path.exists(csv_file):
@@ -251,6 +259,7 @@ def process_and_send(all_pages_data):
                 })
                 
     # Send to API if enabled
+    api_success = None
     if API_ENABLED and all_trading:
         api_success = send_to_api(all_trading, all_historical, all_metrics)
         
@@ -266,11 +275,11 @@ def process_and_send(all_pages_data):
     if WRITE_TO_CSV_ENABLED:
         file_ts = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
         
-        if all_trading: write_to_csv(all_trading, f'trading_{file_ts}')
+        if all_trading: write_to_csv(all_trading, f'trading_{file_ts}', api_success=api_success)
         
-        if all_historical: write_to_csv(all_historical, f'historical_{file_ts}')
+        if all_historical: write_to_csv(all_historical, f'historical_{file_ts}', api_success=api_success)
         
-        if all_metrics: write_to_csv(all_metrics, f'metrics_{file_ts}')
+        if all_metrics: write_to_csv(all_metrics, f'metrics_{file_ts}', api_success=api_success)
             
     print(f"✅ Processed {len(all_trading)} total stocks across {len(all_pages_data)} lists.")
     

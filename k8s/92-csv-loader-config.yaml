@@ -1,0 +1,220 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: csv-loader-script
+  namespace: stockster
+data:
+  load_csv.py: |
+    # your python code here
+    # reads CSV, inserts into DB, moves to archive
+    #!/usr/bin/env python3
+    """
+    Load CSV files from /data/ directory into the database
+    Supports both SQLite (development) and PostgreSQL (production)
+    """
+    import os
+    import sys
+    from typing import Any, Dict, List, Optional
+    import pandas as pd
+    import shutil
+    from pathlib import Path
+    import json
+
+    import requests
+
+    # Add current directory to path for imports
+    sys.path.insert(0, str(Path(__file__).parent))
+    API_URL = os.getenv("API_URL", "http://localhost:8000/api/v1")
+    DATA_PATH = Path("./data")
+    ARCHIVE_PATH = DATA_PATH / "archive"
+    CHUNK_SIZE_MB = 5  # 5MB chunk size for API payloads
+
+
+    TABLES_SCHEMAS = {
+        
+        "trading": {
+            "cols": [
+            "timestamp",
+            "list",
+            "name",
+            "last_price",
+            "change_abs",
+            "change_pct",
+            "highest",
+            "lowest",
+            "volume",
+            "market_value",
+            "href",
+        ],
+            "types": {
+                "last_price": float,
+                "change_abs": float,
+                "change_pct": float,
+                "highest": float,
+                "lowest": float,
+                "volume": int,
+                "market_value": int,
+            }
+        },
+        "metrics": {
+            "cols": [
+                "timestamp",
+                "list",
+                "name",
+                "pe_ratio",
+                "ps_ratio",
+                "earning_per_share",
+                "equity_per_share",
+                "dividend_yield",
+                "direct_return",
+            ],
+            "types": {
+                "pe_ratio": float,
+                "ps_ratio": float,
+                "earning_per_share": float,
+                "equity_per_share": float,
+                "dividend_yield": float,
+                "direct_return": float,
+            },
+        },
+        "historical": {
+            "cols": [
+                "timestamp",
+                "list",
+                "name",
+                "ath",
+                "date_of_ath",
+                "one_day_change",
+                "one_month_change",
+                "year_to_date_change",
+                "one_year_change",
+            ],
+            "types": {
+                "ath": float,
+                "one_day_change": float,
+                "one_month_change": float,
+                "year_to_date_change": float,
+                "one_year_change": float,
+            },
+        },
+    }
+
+    def get_table_key(filename: str) -> Optional[str]:
+        """Determine table key based on filename"""
+        for key in TABLES_SCHEMAS.keys():
+            if key in filename:
+                return key
+        return None
+
+
+    def process_file(file_path: Path) -> List[Dict[str, Any]]:
+        table_key = get_table_key(file_path.name)
+        if not table_key:
+            print(f"⚠️  Skipping file with unrecognized format: {file_path.name}")
+            return []
+        schema = TABLES_SCHEMAS[table_key]
+        try:
+            df = pd.read_csv(file_path, header=None, names=schema["cols"])
+            df = df.drop_duplicates()
+            
+            numeric_cols = list(schema["types"].keys())
+            for col in numeric_cols:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            
+            df = df.dropna(subset=numeric_cols)
+            df = df.astype(schema["types"])
+            
+            return df.to_dict(orient="records"), table_key
+        except Exception as e:
+            print(f"❌ Error processing file {file_path.name}: {e}")
+            return [], None
+
+    def send_to_api(payload: Dict[str, Any]) -> bool:
+        """Send scraped data to API in 5MB chunks"""
+        try:
+            api_endpoint = f"{API_URL}/stocks/bulk"
+
+            print(f"\n📡 Preparing to send data to API: {api_endpoint}")
+            print(f"   - Trading records: {len(payload.get('trading', []))}")
+            print(f"   - Historical records: {len(payload.get('historical', []))}")
+            print(f"   - Metrics records: {len(payload.get('metrics', []))}")
+
+            response = requests.post(
+                api_endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=60,
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                print(f"    ✅ uploaded T:{result.get('trading_inserted', 0)} H:{result.get('historical_inserted', 0)} M:{result.get('metrics_inserted', 0)}")
+                return True
+        except Exception as e:
+            print(f"❌ Unexpected error sending to API: {e}")
+            return False
+
+    def main():
+        files = sorted(list(DATA_PATH.glob("2026/**/*.csv")))
+        if not files:
+            print("No CSV files found in ./data/2026 directory.")
+            return
+
+        current_payload = {"trading": [], "historical": [], "metrics": []}
+        current_size = 0
+        max_payload_size = CHUNK_SIZE_MB * 1024 * 1024  # 5MB
+
+        files_in_current_chunk = set()
+        print(f"📂 Found {len(files)} CSV files to process.")
+        
+        for file in files:
+            records, key = process_file(file)
+            if not records: continue
+            
+            print(f"📖 Processing {file.name} ({len(records)} records)")
+            files_in_current_chunk.add(file)
+            
+            for row, record in enumerate(records):
+                rec_size = len(json.dumps(record).encode("utf-8"))
+                if current_size + rec_size > max_payload_size:
+                    
+                    if send_to_api(current_payload):
+                        if row < len(records) - 1:
+                            print(f"⚠️ Current file {file.name} has more records. These will be included in the next chunk.")
+                            archive_files(files_in_current_chunk.difference({file}))
+                        else:
+                            archive_files(files_in_current_chunk)
+                        files_in_current_chunk.clear()
+                        
+                        files_in_current_chunk.add(file)  
+                    else:   
+                        print("⚠️ Chunk failed. Stopping to prevent data desync.")
+                        return
+                    
+                    current_payload = {"trading": [], "historical": [], "metrics": []}
+                    current_size = 0
+                    
+                
+                current_payload[key].append(record)
+                current_size += rec_size
+                
+        if any(current_payload.values()):
+            if send_to_api(current_payload):
+                archive_files(files_in_current_chunk)
+            else:
+                print("⚠️ Final chunk failed. These files remain in /data/ for retry.")
+
+    def archive_files(files: set):
+        for file in files:
+            try:
+                dest = ARCHIVE_PATH / file.relative_to(DATA_PATH)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(file), str(dest))
+                print(f"  📦 - Archived {file.name} to {dest}")
+            except Exception as e:
+                print(f"❌ Error archiving file {file.name}: {e}")
+
+    if __name__ == "__main__":
+        main()
+
+        

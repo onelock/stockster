@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: csv-loader-job
+  namespace: stockster
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: csv-loader
+          image: python:3.11
+          command: ["sh", "-c"]
+          args: 
+            - pip install pandas requests && python /app/load_csv.py
+          env: 
+          - name: API_URL 
+            value: "http://api-svc/api/v1"
+          volumeMounts:
+            - name: csv-to-db
+              mountPath: /app
+            - name: stockster-data
+              mountPath: /data
+      volumes:
+        - name: csv-to-db
+          configMap:
+            name: csv-loader-script
+        - name: stockster-data
+          persistentVolumeClaim:
+            claimName: stockster-data-pvc

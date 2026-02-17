@@ -104,16 +104,18 @@ class StockRepository:
     
     def get_database_stats(self) -> Dict[str, Any]:
         """Get database statistics."""
-        query = text("""
-            SELECT 
-                COUNT(DISTINCT name) as total_stocks,
-                COUNT(*) as total_records,
-                MIN(timestamp) as first_date,
-                MAX(timestamp) as last_date
-            FROM stock_data
-        """)
+        
+        query = (
+            select(
+                func.count(func.distinct(StockTrading.name)).label("total_stocks"),
+                func.count().label("total_records"),
+                func.min(StockTrading.timestamp).label("first_date"),
+                func.max(StockTrading.timestamp).label("last_date")
+            )
+        )
+
         result = self.session.exec(query).first()
-        return dict(result) if result else {}
+        return dict(result._mapping) if result else {}
     
     def check_connection(self) -> bool:
         """Check if database connection is alive."""
@@ -123,44 +125,32 @@ class StockRepository:
         except Exception:
             return False    
 
-    from sqlalchemy.dialects.postgresql import insert
 
     def bulk_insert(self, model: Any, data: List[Dict[str, Any]]) -> int:
         if not data:
             return 0
 
-        # 1. Create the insert
         unique_data = { (row['name'], row['timestamp']): row for row in data }
         
         deduped_data = list(unique_data.values())
         stmt = insert(model).values(deduped_data)
         
-        # 2. Map columns precisely
-        # We use model.__table__.c (columns) to get the clean names
-        # and map them to the 'excluded' values.
         update_cols = {}
         for col in model.__table__.columns:
             if col.name not in ['name', 'timestamp', 'id']:
-                # Using bracket notation here is the safest way to avoid 'list' keyword issues
                 update_cols[col.name] = stmt.excluded[col.name]
 
-        # DEBUG: Un-comment the line below if it still fails to see the generated keys
-        print(f"DEBUG: Updating columns: {list(update_cols.keys())}")
-
-        # 3. Build the UPSERT
-        upsert_stmt = stmt.on_conflict_do_update(
-            index_elements=['name', 'timestamp'],
-            set_=update_cols
+        upsert_stmt = stmt.on_conflict_do_nothing(
+            index_elements=['name', 'timestamp']
+            # set_=update_cols
         )
 
         try:
-            # Use execute instead of exec for DML
-            self.session.execute(upsert_stmt)
+            self.session.exec(upsert_stmt)
             self.session.commit()
         except Exception as e:
             self.session.rollback()
             print(f"❌ Database Error: {e}")
-            # Re-raise to see the full traceback if needed
             raise e
         
         return len(data)

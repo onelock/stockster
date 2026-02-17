@@ -50,7 +50,7 @@ python-multipart==0.0.21
 pytz==2025.2
 
 # Alpaca API for development data
-alpaca-py==0.35.2
+alpaca-py==0.36.0
 PyYAML==6.0.3
 referencing==0.37.0
 requests==2.32.5
