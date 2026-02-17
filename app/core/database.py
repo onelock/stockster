@@ -6,8 +6,6 @@ from typing import Generator
 from sqlmodel import create_engine, Session
 from sqlalchemy.engine import Engine
 from .config import settings
-from fastapi import Security, HTTPException, status
-from fastapi.security import H
 
 
 def get_database_url() -> str:
