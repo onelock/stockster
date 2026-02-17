@@ -29,6 +29,26 @@ class StockTrading(StockTradingBase, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
+    
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "id": 1,
+                "name": "ABB",
+                "last_price": 705.8,
+                "change_abs": -2.4,
+                "change_pct": -0.34,
+                "highest": 710.4,
+                "lowest": 704.6,
+                "volume": 181972,
+                "market_value": 1301793,
+                "list": "Large Cap",
+                "timestamp": "2026-01-16T14:15:21",
+                "href": "/bors/aktier/abb-730/",
+                "created_at": "2026-01-16T14:15:21"
+            }
+        }
+    }
 
 
 class StockTradingRead(StockTradingBase):
@@ -36,25 +56,6 @@ class StockTradingRead(StockTradingBase):
     id: int
     created_at: datetime
 
-    # model_config = {
-    #     "json_schema_extra": {
-    #         "example": {
-    #             "id": 1,
-    #             "name": "ABB",
-    #             "last_price": 705.8,
-    #             "change_abs": -2.4,
-    #             "change_pct": -0.34,
-    #             "highest": 710.4,
-    #             "lowest": 704.6,
-    #             "volume": 181972,
-    #             "market_value": 1301793,
-    #             "list": "Large Cap",
-    #             "timestamp": "2026-01-16T14:15:21",
-    #             "href": "/bors/aktier/abb-730/",
-    #             "created_at": "2026-01-16T14:15:21"
-    #         }
-    #     }
-    # }
 
 
 class StockHistoricalBase(SQLModel):
@@ -76,31 +77,29 @@ class StockHistorical(StockHistoricalBase, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
-
+    
+    model_config = {
+            "json_schema_extra": {
+                "example": {
+                    "id": 1,
+                    "name": "ABB",
+                    "ath": 726.4,
+                    "date_ath": "2026-01-16",
+                    "one_day_change": -0.34,
+                    "one_month_change": 3.61,
+                    "year_to_date_change": 2.05,
+                    "one_year_change": 2.62,
+                    "list": "Large Cap",
+                    "timestamp": "2026-01-16T14:15:21",
+                    "created_at": "2026-01-16T14:15:21"
+                }
+            }
+        }
 
 class StockHistoricalRead(StockHistoricalBase):
     """Historical data read schema"""
     id: int
     created_at: datetime
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "id": 1,
-                "name": "ABB",
-                "ath": 726.4,
-                "date_ath": "2026-01-16",
-                "one_day_change": -0.34,
-                "one_month_change": 3.61,
-                "year_to_date_change": 2.05,
-                "one_year_change": 2.62,
-                "list": "Large Cap",
-                "timestamp": "2026-01-16T14:15:21",
-                "created_at": "2026-01-16T14:15:21"
-            }
-        }
-    }
-
 
 class StockMetricsBase(SQLModel):
     """Base financial metrics for a stock"""
@@ -121,13 +120,7 @@ class StockMetrics(StockMetricsBase, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
-
-
-class StockMetricsRead(StockMetricsBase):
-    """Metrics data read schema"""
-    id: int
-    created_at: datetime
-
+    
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -145,6 +138,11 @@ class StockMetricsRead(StockMetricsBase):
             }
         }
     }
+
+class StockMetricsRead(StockMetricsBase):
+    """Metrics data read schema"""
+    id: int
+    created_at: datetime
 
 
 class AlpacaStocksBase(SQLModel):
@@ -167,12 +165,6 @@ class AlpacaStocks(AlpacaStocksBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
 
-
-class AlpacaStocksRead(AlpacaStocksBase):
-    """Alpaca bars read schema"""
-    id: int
-    created_at: datetime
-
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -192,45 +184,10 @@ class AlpacaStocksRead(AlpacaStocksBase):
     }
 
 
-# class StockTradingBulkInsert(SQLModel):
-#     """Bulk insert request for trading data"""
-#     timestamp: str = Field(..., description="Data timestamp")
-#     list: str = Field(..., description="Stock list category")
-#     name: str = Field(..., description="Stock name/ticker")
-#     last_price: Optional[float] = Field(None, description="Last traded price")
-#     change_abs: Optional[float] = Field(None, description="Absolute price change")
-#     change_pct: Optional[float] = Field(None, description="Percentage price change")
-#     highest: Optional[float] = Field(None, description="Highest price of the day")
-#     lowest: Optional[float] = Field(None, description="Lowest price of the day")
-#     volume: Optional[int] = Field(None, description="Trading volume")
-#     market_value: Optional[int] = Field(None, description="Market capitalization")
-#     href: Optional[str] = Field(None, description="URL to stock details")
-
-
-# class StockHistoricalBulkInsert(SQLModel):
-#     """Bulk insert request for historical data"""
-#     timestamp: str = Field(..., description="Data timestamp")
-#     list: str = Field(..., description="Stock list category")
-#     name: str = Field(..., description="Stock name/ticker")
-#     year_high: Optional[float] = Field(None, description="52-week high price")
-#     date_year_high: Optional[float] = Field(None, description="Price on this date previous 52-week")
-#     change_1d: Optional[float] = Field(None, description="1-day change %")
-#     change_1m: Optional[float] = Field(None, description="1-month change %")
-#     change_in_y: Optional[float] = Field(None, description="Year-to-date change %")
-#     change_1y: Optional[float] = Field(None, description="1-year change %")
-
-
-# class StockMetricsBulkInsert(SQLModel):
-#     """Bulk insert request for metrics data"""
-#     timestamp: str = Field(..., description="Data timestamp")
-#     list: str = Field(..., description="Stock list category")
-#     name: str = Field(..., description="Stock name/ticker")
-#     pe_ratio: Optional[float] = Field(None, description="Price-to-Earnings ratio")
-#     ps_ratio: Optional[float] = Field(None, description="Price-to-Sales ratio")
-#     earning_per_share: Optional[float] = Field(None, description="Earnings per share")
-#     equity_per_share: Optional[float] = Field(None, description="Equity per share")
-#     dividend_yield: Optional[float] = Field(None, description="Dividend yield %")
-#     direct_return: Optional[float] = Field(None, description="Direct return %")
+class AlpacaStocksRead(AlpacaStocksBase):
+    """Alpaca bars read schema"""
+    id: int
+    created_at: datetime
 
 
 class BulkInsertRequest(SQLModel):

@@ -10,7 +10,7 @@ import re
 CSV_OUTPUT_DIR = os.getenv('CSV_OUTPUT_DIR', '/data')
 BASE_URL = "https://www.di.se/bors/aktier/"
 API_URL = os.getenv('API_URL', 'http://localhost:8000/api/v1')
-API_ENABLED = os.getenv('API_ENABLED', 'false').lower() == 'true'
+API_ENABLED = os.getenv('API_ENABLED', 'true').lower() == 'true'
 WRITE_TO_CSV_ENABLED=os.getenv('WRITE_TO_CSV_ENABLED', 'true').lower() == 'true'
 
 FLOAT_CLEANING_REGEX = re.compile(r'[,\s\xa0%]|kr')
