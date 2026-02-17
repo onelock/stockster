@@ -27,7 +27,7 @@ spec:
           containers:
           - name: scraper
             image: stockster/scraper
-            imagePullPolicy: IfNotPresent
+            imagePullPolicy: Always
             
             command: ["python", "/app/scrape_di.py"]
             

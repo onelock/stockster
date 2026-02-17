@@ -24,7 +24,7 @@ data:
 
     # Add current directory to path for imports
     sys.path.insert(0, str(Path(__file__).parent))
-    API_URL = os.getenv("API_URL", "http://localhost:8000/api/v1")
+    API_URL = os.getenv("API_URL")
     DATA_PATH = Path("./data")
     ARCHIVE_PATH = DATA_PATH / "archive"
     CHUNK_SIZE_MB = 5  # 5MB chunk size for API payloads
