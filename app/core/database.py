@@ -11,7 +11,7 @@ from .config import settings
 def get_database_url() -> str:
     """Construct PostgreSQL database URL from settings."""
     return (
-        f"postgresql://{settings.postgres_user}:{settings.postgres_password}"
+        f"postgresql://{settings.postgres_user}:{settings.postgres_password.get_secret_value()}"
         f"@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
     )
 

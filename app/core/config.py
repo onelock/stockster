@@ -1,30 +1,30 @@
 """
 Application configuration settings.
 """
+from pathlib import Path
 from pydantic_settings import BaseSettings
+from pydantic import SecretStr
+from dotenv import load_dotenv
+# import os
+
+load_dotenv()
 
 class Settings(BaseSettings):
     # Application
+    # API
     app_name: str = "Stockster API"
     app_version: str = "1.0.0"
     debug: bool = False
-    
-    # Database
-    postgres_host: str = "localhost"
-    postgres_port: int = 5432
-    postgres_db: str = "stocksterdb"
-    postgres_user: str = "stockster"
-    postgres_password: str = "stockster123"
-    
-    # API
     api_v1_prefix: str = "/api/v1"
     
-    # CORS
-    cors_origins: list = ["*"]
+    database_type: str  # Default to PostgreSQL
+    postgres_user: str
+    postgres_password: SecretStr
+    postgres_host: str
+    postgres_port: int
+    postgres_db: str
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
-
-
+    # CORS
+    cors_origins: list = ["*"]  
+        
 settings = Settings()
