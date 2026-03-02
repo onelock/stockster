@@ -27,7 +27,7 @@ class StockService:
             count=len(stocks),
             limit=limit,
             offset=offset,
-            stocks=stocks,
+            data=stocks,
         )
     
     def get_latest_stocks(self) -> LatestStocksResponse:
@@ -38,7 +38,7 @@ class StockService:
         return LatestStocksResponse(
             timestamp=timestamp,
             count=len(stocks),
-            stocks=stocks
+            data=stocks
         )
     
     def get_stock_detail(self, name: str, days: int = 30) -> Optional[StockDetailResponse]:
