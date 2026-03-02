@@ -28,7 +28,7 @@ class StockTrading(StockTradingBase, table=True):
     __tablename__ = "stock_data"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
+    created_at: Optional[datetime] = Field(default_factory=datetime, description="Record creation timestamp")
     
     model_config = {
         "json_schema_extra": {
@@ -76,25 +76,25 @@ class StockHistorical(StockHistoricalBase, table=True):
     __tablename__ = "stock_historical"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
+    created_at: Optional[datetime] = Field(default_factory=datetime, description="Record creation timestamp")
     
     model_config = {
-            "json_schema_extra": {
-                "example": {
-                    "id": 1,
-                    "name": "ABB",
-                    "ath": 726.4,
-                    "date_ath": "2026-01-16",
-                    "one_day_change": -0.34,
-                    "one_month_change": 3.61,
-                    "year_to_date_change": 2.05,
-                    "one_year_change": 2.62,
-                    "list": "Large Cap",
-                    "timestamp": "2026-01-16T14:15:21",
-                    "created_at": "2026-01-16T14:15:21"
-                }
+        "json_schema_extra": {
+            "example": {
+                "id": 1,
+                "name": "ABB",
+                "ath": 726.4,
+                "date_ath": "2026-01-16",
+                "one_day_change": -0.34,
+                "one_month_change": 3.61,
+                "year_to_date_change": 2.05,
+                "one_year_change": 2.62,
+                "list": "Large Cap",
+                "timestamp": "2026-01-16T14:15:21",
+                "created_at": "2026-01-16T14:15:21"
             }
         }
+    }
 
 class StockHistoricalRead(StockHistoricalBase):
     """Historical data read schema"""
@@ -119,7 +119,7 @@ class StockMetrics(StockMetricsBase, table=True):
     __tablename__ = "stock_metrics"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
+    created_at: Optional[datetime] = Field(default_factory=datetime, description="Record creation timestamp")
     
     model_config = {
         "json_schema_extra": {
@@ -163,7 +163,7 @@ class AlpacaStocks(AlpacaStocksBase, table=True):
     __tablename__ = "alpaca_bars"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
+    created_at: Optional[datetime] = Field(default_factory=datetime, description="Record creation timestamp")
 
     model_config = {
         "json_schema_extra": {

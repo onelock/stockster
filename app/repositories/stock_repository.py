@@ -44,13 +44,14 @@ class StockRepository:
         # Get all stocks at that timestamp
         query = (
             select(StockTrading)
-            .where(StockTrading.timestamp == latest_time)
+            .distinct(StockTrading.name)
+            .where(StockTrading.timestamp <= latest_time)
             .order_by(StockTrading.name)
         )
         result = self.session.exec(query)
         stocks = [dict(row) for row in result]
         
-        return latest_time, stocks
+        return  latest_time, stocks
     
     def get_stock_by_name(self, name: str, days: int = 30) -> List[Dict[str, Any]]:
         """Get stock data for a specific stock."""
