@@ -1,7 +1,6 @@
 """
 Application configuration settings.
 """
-from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import SecretStr
 # from dotenv import load_dotenv
@@ -17,7 +16,7 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
     
-    database_type: str  # Default to PostgreSQL
+    database_type: str  ="postgresql" # Default to PostgreSQL
     postgres_user: str
     postgres_password: SecretStr
     postgres_host: str
