@@ -128,6 +128,7 @@ class StockRepository:
 
 
     def bulk_insert(self, model: Any, data: List[Dict[str, Any]]) -> int:
+        
         if not data:
             return 0
 
@@ -136,16 +137,17 @@ class StockRepository:
         deduped_data = list(unique_data.values())
         stmt = insert(model).values(deduped_data)
         
-        update_cols = {}
-        for col in model.__table__.columns:
-            if col.name not in ['name', 'timestamp', 'id']:
-                update_cols[col.name] = stmt.excluded[col.name]
+        # update_cols = {}
+        # for col in model.__table__.columns:
+        #     if col.name not in ['name', 'timestamp', 'id']:
+        #         update_cols[col.name] = stmt.excluded[col.name]
 
         upsert_stmt = stmt.on_conflict_do_nothing(
             index_elements=['name', 'timestamp']
             # set_=update_cols
         )
 
+        
         try:
             self.session.exec(upsert_stmt)
             self.session.commit()

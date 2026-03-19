@@ -10,12 +10,14 @@ resources:
 
   # --- Phase 2: State (Database) ---
   - 20-postgres.yaml
+  
   # --- Phase 3: Initialization (Migrations) ---
   # - 30-migration-job.yaml
 
   # --- Phase 4: Applications ---
   - 40-api.yaml
   # - 41-dashboard.yaml
+
   # --- Phase 5: Background Tasks ---
   - 50-scraper-job.yaml
   # - 51-scraper-evening.yaml

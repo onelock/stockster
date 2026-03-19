@@ -28,7 +28,7 @@ class StockTrading(StockTradingBase, table=True):
     __tablename__ = "stock_data"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=datetime, description="Record creation timestamp")
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
     
     model_config = {
         "json_schema_extra": {
@@ -76,7 +76,7 @@ class StockHistorical(StockHistoricalBase, table=True):
     __tablename__ = "stock_historical"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=datetime, description="Record creation timestamp")
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
     
     model_config = {
         "json_schema_extra": {
@@ -119,7 +119,7 @@ class StockMetrics(StockMetricsBase, table=True):
     __tablename__ = "stock_metrics"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=datetime, description="Record creation timestamp")
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
     
     model_config = {
         "json_schema_extra": {
@@ -163,7 +163,7 @@ class AlpacaStocks(AlpacaStocksBase, table=True):
     __tablename__ = "alpaca_bars"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=datetime, description="Record creation timestamp")
+    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Record creation timestamp")
 
     model_config = {
         "json_schema_extra": {
