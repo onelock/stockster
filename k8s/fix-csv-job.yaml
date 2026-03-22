@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: csv-loader-job
+  name: csv-preprocess-job
   namespace: stockster
 spec:
   backoffLimit: 0
@@ -9,29 +9,26 @@ spec:
     spec:
       restartPolicy: Never
       containers:
-        - name: csv-loader
+        - name: csv-preprocess
           image: python:3.11
           command: ["sh", "-c"]
-          args: 
+          args:
             - |
               apt-get update && \
               apt-get install -y python3-venv && \
               python -m venv /venv && \
               . /venv/bin/activate && \
-              pip install --no-cache-dir pandas requests && \
-              python /app/load_csv.py
-          env: 
-          - name: API_URL 
-            value: "http://api-svc/api/v1"
+              pip install pandas && \
+              python /app/preprocess.py
           volumeMounts:
-            - name: csv-to-db
+            - name: preprocess-script
               mountPath: /app
             - name: stockster-data
               mountPath: /data
       volumes:
-        - name: csv-to-db
+        - name: preprocess-script
           configMap:
-            name: csv-loader-script
+            name: csv-preprocess-script
         - name: stockster-data
           persistentVolumeClaim:
             claimName: stockster-data-pvc

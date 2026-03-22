@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: csv-preprocess-script
+  namespace: stockster
+data:
+  preprocess.py: |
+    import pandas as pd
+    from pathlib import Path
+    import re
+
+    DATA_DIR = Path("/data/2026/2026")
+    NEW_ROOT = Path("/data/2026/fixed")
+    NEW_ROOT.mkdir(parents=True, exist_ok=True)
+
+    TABLES_SCHEMAS = {
+        "trading":[
+            "timestamp",
+            "list",
+            "name",
+            "last_price",
+            "change_abs",
+            "change_pct",
+            "highest",
+            "lowest",
+            "volume",
+            "market_value",
+            "href",
+        ],
+        "metrics": [
+                "timestamp",
+                "list",
+                "name",
+                "pe_ratio",
+                "ps_ratio",
+                "earning_per_share",
+                "equity_per_share",
+                "dividend_yield",
+                "direct_return",
+            ],
+        "historical": [
+                "timestamp",
+                "list",
+                "name",
+                "ath",
+                "date_of_ath",
+                "one_day_change",
+                "one_month_change",
+                "year_to_date_change",
+                "one_year_change",
+            ]
+    }
+
+    def shift_to_previous_weekday(ts):
+        dow = ts.weekday()  # Monday=0 ... Sunday=6
+        if dow == 0:      # Monday
+            return ts - pd.Timedelta(days=3)
+        elif dow == 6:    # Sunday
+            return ts - pd.Timedelta(days=2)
+        elif dow == 5:    # Saturday
+            return ts - pd.Timedelta(days=1)
+        else:
+            return ts - pd.Timedelta(days=1)
+
+    pattern = re.compile(r"(trading|historical|metrics)_(\d{4}-\d{2}-\d{2})_(\d{6})\.csv")
+
+    def main():
+        print("Starting CSV preprocessing...")
+
+        count = 0
+        for file in DATA_DIR.glob("**/*.csv"):
+            m = pattern.match(file.name)
+            if not m:
+                print(f"Skipping file with unexpected name format: {file.name}")
+                continue
+
+            filetype, datestr, timestr = m.groups()
+            file_dt = pd.to_datetime(f"{datestr} {timestr}", format="%Y-%m-%d %H%M%S")
+
+            # Only shift files with time starting with 080*
+
+            if timestr.startswith("080"):
+                new_dt = shift_to_previous_weekday(file_dt)
+            else:
+                continue  # Skip files that don't match the time pattern
+
+            print(f"Processing {file.name} with timestamp {file_dt}...")
+            print(f"Original timestamp: {file_dt}, New timestamp: {new_dt}")
+            # Load CSV and fix timestamps inside
+            schema = TABLES_SCHEMAS[filetype]
+            df = pd.read_csv(file, header=None, names=schema)
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+
+            print(f"Sample timestamps before shift:\n{df['timestamp'].head()}")
+            
+            df["timestamp"] = df["timestamp"].apply(shift_to_previous_weekday)
+
+            print(f"Sample timestamps after shift:\n{df['timestamp'].head()}")
+            # Save corrected CSV
+            df.to_csv(file, index=False)
+
+            print(f"Finished processing {file.name}. Saved with corrected timestamps.")
+            # Rename file
+            new_name = f"{filetype}_{new_dt.strftime('%Y-%m-%d')}_{timestr}.csv"
+            file.rename(NEW_ROOT / new_name)
+
+            print(f"Fixed: {file.name} → {new_name}")
+            count += 1
+        print(f"All files processed. Total files fixed: {count}")
+
+    if __name__ == "__main__":
+        main()
+

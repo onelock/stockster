@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-scraper-job
+  namespace: stockster
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+
+      imagePullSecrets:
+      - name: ghcr-secret
+
+      containers:
+      - name: scraper
+        image: ghcr.io/onelock/stockster-scraper:latest
+        imagePullPolicy: Always
+        
+        command: ["python", "/app/scrape_di.py"]
+        
+        volumeMounts:
+        - name: stockster-data
+          mountPath: /data
+        - name: scraper-code
+          mountPath: /app
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      
+      volumes:
+      - name: stockster-data
+        persistentVolumeClaim:
+          claimName: stockster-data-pvc
+      - name: scraper-code
+        configMap:
+          name: scraper-code
+          defaultMode: 0777

@@ -78,7 +78,7 @@ Thumbs.db
 .env.*
 .env.local
 .env.*.local
-*.env
+*.env*
 
 # Pytest
 .pytest_cache/

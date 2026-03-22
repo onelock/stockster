@@ -1,23 +1,25 @@
 """
 Data loading and caching for dashboard
 """
-
+import toml
+from pathlib import Path
 import pandas as pd
 import requests
 from typing import Optional
 import os
 
 
-# API configuration
-# Default to localhost for development, override with API_URL env var for production
-API_URL = os.environ.get('API_URL', 'http://localhost:8000')
+
+# API_URL = st.config.get_option("api.url")
 
 
 class StockDataLoader:
     """Handles all API communication and data loading"""
     
-    def __init__(self, api_url: str = API_URL):
+    def __init__(self, api_url: str = "API_URL"):
         self.api_url = api_url
+        print(f"Initialized StockDataLoader with API URL: {self.api_url}")
+    
     
     def load_latest_stocks(self, limit: int = 1000) -> pd.DataFrame:
         """Load latest stock data from API"""
@@ -36,8 +38,11 @@ class StockDataLoader:
             df["timestamp"] = pd.to_datetime(df["timestamp"])
             df["last_price"] = pd.to_numeric(df["last_price"], errors="coerce")
             df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+            df["change_abs"] = pd.to_numeric(df["change_abs"], errors="coerce")
             df["change_pct"] = pd.to_numeric(df["change_pct"], errors="coerce")
             df["market_value"] = pd.to_numeric(df["market_value"], errors="coerce")
+            
+            df = df.loc[:, ~df.columns.isin([ "id", "created_at", "updated_at"])]
             return df
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to load data from API: {e}")

@@ -21,8 +21,8 @@ spec:
         spec:
           restartPolicy: Never  # Retry failed containers
           
-          # imagePullSecrets:
-          # - name: ghcr-secret
+          imagePullSecrets:
+          - name: ghcr-secret
           
           containers:
           - name: scraper

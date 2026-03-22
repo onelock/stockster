@@ -3,10 +3,10 @@ Application configuration settings.
 """
 from pydantic_settings import BaseSettings
 from pydantic import SecretStr
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 # import os
 
-# load_dotenv()
+load_dotenv()
 
 class Settings(BaseSettings):
     # Application

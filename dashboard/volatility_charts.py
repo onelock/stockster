@@ -1,6 +1,7 @@
 """Volatility visualization for dashboard"""
 import altair as alt
 import pandas as pd
+from dashboard.analysis.volatility import calculate_volatility
 
 
 def create_volatility_ranking_chart(df: pd.DataFrame, top_n: int = 5) -> alt.Chart:
@@ -15,7 +16,7 @@ def create_volatility_ranking_chart(df: pd.DataFrame, top_n: int = 5) -> alt.Cha
         Altair chart
     """
     # Take top N
-    df_top = df.head(top_n).copy()
+    df_top = df
     
     # Use avg_daily_volatility_pct directly
     if 'avg_daily_volatility_pct' not in df_top.columns:

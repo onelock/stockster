@@ -175,5 +175,4 @@ def render_strategy_registry():
 def render_footer():
     """Render sidebar footer"""
     st.sidebar.markdown("---")
-    st.sidebar.caption("Data Source: Alpaca Markets")
-    st.sidebar.caption("Dev API: http://localhost:8000")
+    st.sidebar.caption("Dev API: http://localhost:8000/docs")

@@ -1,6 +1,8 @@
+"""DI Stock Scraper - Fetches stock data from di.se"""
 import asyncio
 from playwright.async_api import async_playwright
-import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import os
 import csv
 from urllib.parse import urljoin
@@ -20,7 +22,6 @@ FLOAT_CLEANING_LAMBDA = lambda m: '.' if m.group() == ',' else ''
 MARKET_LIST_LIMIT = 5
 CONCURRENT_SCRAPE_LIMIT = 5
 
-
 def clean_number(s):
     if s is None: return None
     try:
@@ -36,31 +37,26 @@ def clean_integer(s):
         return int(cleaned)
     except (ValueError, TypeError):
         return None
-    
-    
-def build_file_path(file_type: str, extension: str = "csv", api_success: bool = False) -> str:
+
+def build_file_path(file_type: str, extension: str = "csv", api_success: bool = False ) -> str:
     """Build file path for output files"""
-    
     now = datetime.datetime.now() 
     
     year = now.strftime("%Y") 
     month = now.strftime("%m") 
-    day = now.strftime("%d")
-    
+    day = now.strftime("%d") 
     if api_success:
         base_folder = os.path.join(CSV_OUTPUT_DIR, "archive")
     else:
         base_folder = CSV_OUTPUT_DIR
-        
+
     folder_path = os.path.join(base_folder, year, month, day)
-    
     os.makedirs(folder_path, exist_ok=True)
     filename = f"{file_type}.{extension}"
     
     return os.path.join(folder_path, filename)
 
-
-def write_to_csv(data, filename, mode='w', api_success=False):
+def write_to_csv(data, filename, mode='a', api_success=False):
     """Write data to CSV file"""
     csv_file = build_file_path(filename, api_success=api_success)
     with open(csv_file, mode, newline='', encoding='utf-8') as f:
@@ -178,9 +174,8 @@ async def scrape_page_optimized(browser, item):
         await context.close()
         return {}
 
-
 def process_and_send(all_pages_data):
-    timestamp = datetime.datetime.today().strftime('%Y-%m-%d')
+    timestamp = datetime.today()
     os.makedirs(CSV_OUTPUT_DIR, exist_ok=True)
     
     # Combine data from all pages
@@ -188,32 +183,37 @@ def process_and_send(all_pages_data):
     all_historical = []
     all_metrics = []
     
-    
+    seen_names = set()
     for list_name, info in all_pages_data.items():
         data = info['data']
         
         hist_lookup = {row['name']: row for row in data.get('table_1', [])}
         metr_lookup = {row['name']: row for row in data.get('table_2', [])}
         
-        
-        seen = set()
         for stock in data.get('table_0', []):
-            if stock['name'] in seen:
+            if stock['name'] in seen_names:
                 continue
             
-            seen.add(stock['name'])
+            seen_names.add(stock['name'])
             
             name =  stock['name']
             t = stock['data']
             href = stock['href']
             
-            t_time = t[-1] if len(t) >= 8 else '00:00'
-            iso_ts = f'{timestamp}T{t_time}:00'
-            
             # Add list to data
+            delta = timedelta(days=1)
+            
+            # when scrape time is 8:00-8:05, set  di.se data is for the previous day, so shift timestamp back to previous day to match data timestamp
+            if timestamp.hour == 8 and timestamp.minute < 5:
+                if timestamp.weekday() == 0:  # Monday
+                    timestamp -= timedelta(days=3)  # Go back to Friday
+                else:
+                    timestamp -= delta  # Go back to previous day
+
+            timestamp_str = timestamp.strftime('%Y-%m-%d') 
             if len(t) >= 8:
                 all_trading.append({
-                    'timestamp': iso_ts,
+                    'timestamp': f'{timestamp_str}T{t[-1]}',
                     'list': list_name,
                     'name': name,
                     'last_price': clean_number(t[1]),
@@ -231,7 +231,7 @@ def process_and_send(all_pages_data):
             h_data = h['data'] if h else []
             if len(h_data) >= 8:
                 all_historical.append({
-                    'timestamp': iso_ts,
+                    'timestamp': f'{timestamp_str}T{h_data[-1]}',
                     'list': list_name,
                     'name': name,
                     'ath': clean_number(h_data[2]),
@@ -247,7 +247,7 @@ def process_and_send(all_pages_data):
             m_data = m['data'] if m else []
             if len(m_data) >= 8:
                 all_metrics.append({
-                    'timestamp': iso_ts,
+                    'timestamp': f'{timestamp_str}T{m_data[-1]}',
                     'list': list_name,
                     'name': name,
                     'pe_ratio': clean_number(m_data[2]),
@@ -273,7 +273,7 @@ def process_and_send(all_pages_data):
     print(f"{'='*90}")
     
     if WRITE_TO_CSV_ENABLED:
-        file_ts = datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
+        file_ts = timestamp.strftime('%Y-%m-%d_%H%M%S')
         
         if all_trading: write_to_csv(all_trading, f'trading_{file_ts}', api_success=api_success)
         
@@ -282,7 +282,6 @@ def process_and_send(all_pages_data):
         if all_metrics: write_to_csv(all_metrics, f'metrics_{file_ts}', api_success=api_success)
             
     print(f"✅ Processed {len(all_trading)} total stocks across {len(all_pages_data)} lists.")
-    
 
 async def main():
     async with async_playwright() as p:
