@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements_scraper.txt
 # Create data directory with write permissions for any user
 RUN mkdir -p /data && chmod 777 /data
 RUN echo "Playwright browsers installed."
+RUN echo "Playwright browsers installed."
 RUN echo "Triggering scraper image build. If you see this message, the build context is correct and the Dockerfile is being processed." 
 # Set environment variables
 ENV CSV_OUTPUT_DIR=/data
