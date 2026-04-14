@@ -10,7 +10,7 @@ spec:
   schedule: "*/15 7-15 * * 1-5" # summertime
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 1
-  concurrencyPolicy: Forbid  # Prevent overlapping runs
+  concurrencyPolicy: Forbid  # Prevent overlapping runs for better resource management
   
   jobTemplate:
     spec:
