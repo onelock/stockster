@@ -123,8 +123,6 @@ class StockDetailPage:
                     df_chart_data = df_chart_data.sort_values("timestamp")
                     df_chart_data = df_chart_data.set_index("timestamp")
                     
-                    
-                    
                     filter = {
                         "1 dag":[ (current_date - pd.Timedelta(days=0)), '%H:%M'],
                         "1 vecka":[ current_date - pd.Timedelta(weeks=1), '%d %b'],
@@ -150,11 +148,12 @@ class StockDetailPage:
                     # else:
                     
                     st.write(f"Price Chart{filter[time_period_filter][0]} interval")
+                    
                     df_chart_data = df_chart_data.reset_index()
                     df_chart_data["timestamp"] = pd.to_datetime(df_chart_data["timestamp"])
                     df_chart_data = df_chart_data.sort_values("timestamp").reset_index(drop=True)
-
                     df_chart_data["trade_index"] = df_chart_data.index
+
                     tick_map = {
                         "1 dag": 10,
                         "1 vecka": 8,
@@ -169,12 +168,12 @@ class StockDetailPage:
                     ticks = tick_map.get(time_period_filter, 10)
                     
                     y_min = df_chart_data['last_price'].min()
-                    y_max = df_chart_data['last_price'].max()
                     s = df_chart_data['last_price'].iloc[0]
                     t = df_chart_data['last_price'].iloc[-1]
                     
                     chart_color =  colors[1] if s > t else colors[0]
-                    chart = alt.Chart(df_chart_data.reset_index()).mark_area(
+                    
+                    price_chart = alt.Chart(df_chart_data.reset_index()).mark_area(
                             color=alt.Gradient(
                                 gradient='linear',
                                 stops=[
@@ -209,7 +208,20 @@ class StockDetailPage:
                                 ),
                             ).interactive()
                     
-                    st.altair_chart(chart)
+                    df_vol = calculate_volatility(df)
+                    atr_chart = alt.Chart(df_vol).mark_line().encode(
+                        x=alt.X(
+                            'timestamp:Q',
+                            axis=alt.Axis(
+                            )
+                        ),
+                        y=alt.Y(
+                            'atr_pct:Q'
+                        )
+                    )
+                    
+                    st.altair_chart(price_chart)
+                    st.altair_chart(atr_chart)
                     
                     options = ["1 dag", "1 vecka", "1 mån", "3 mån", "i år" , "1 år", "3 år", "5 år", "Max"]
                     
@@ -289,11 +301,18 @@ class StockDetailPage:
                     value=f"{dividend_per_share}",
                     help="Dividend per share (DPS) is the total dividends declared by a company for every outstanding share of stock."
                 )
+                
+                summary :dict = get_volatility_summary(df)
+                st.metric(
+                    label="Average Daily Volatility",
+                    value=f"{summary['avg_daily_volatility']:2f}",
+                    help="Average daily volatility"
+                )
             
 
         # average_daily_volatility = calculate_average_daily_volatility(df,252)
         
         # volatility_chart = create_volatility_ranking_chart(df)
         # st.write(average_daily_volatility)  
-        summary = get_volatility_summary(df)
-        st.dataframe(data=summary)
+        
+        

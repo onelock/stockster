@@ -153,5 +153,5 @@ def get_volatility_summary(df: pd.DataFrame, window: int = 20) -> dict:
         'avg_volatility': df_clean['volatility'].mean(),
         'max_volatility': df_clean['volatility'].max(),
         'min_volatility': df_clean['volatility'].min(),
-        # 'volatility_trend': 'increasing' if df_clean['volatility'].iloc[-5:].mean() > df_clean['volatility'].iloc[-20:-5].mean() else 'decreasing'
+        'volatility_trend': 'increasing' if df_clean['volatility'].iloc[-5:].mean() > df_clean['volatility'].iloc[-20:-5].mean() else 'decreasing' 
     }
