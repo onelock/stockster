@@ -5,7 +5,9 @@ metadata:
   namespace: stockster
 spec:
   # Every 15 minutes during market hours (9:00-17:30 CET = 8:00-16:30 UTC, Mon-Fri)
-  schedule: "*/15 8-16 * * 1-5"
+  # schedule: "*/15 8-16 * * 1-5" # winter time
+  # Note: During summertime, market hours are 9:00-17:30 CEST = 7:00-15:30 UTC
+  schedule: "*/15 7-15 * * 1-5" # summertime
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 1
   concurrencyPolicy: Forbid  # Prevent overlapping runs
