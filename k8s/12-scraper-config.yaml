@@ -9,6 +9,7 @@ data:
     import asyncio
     from playwright.async_api import async_playwright
     import datetime
+    from zoneinfo import ZoneInfo
     import os
     import csv
     from urllib.parse import urljoin
@@ -47,7 +48,7 @@ data:
         
     def build_file_path(file_type: str, extension: str = "csv", api_success: bool = False ) -> str:
         """Build file path for output files"""
-        now = datetime.datetime.now() 
+        now = datetime.datetime.now(ZoneInfo("Europe/Stockholm"))
         
         year = now.strftime("%Y") 
         month = now.strftime("%m") 
@@ -184,7 +185,7 @@ data:
 
 
     def process_and_send(all_pages_data):
-        timestamp = datetime.datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
+        timestamp = datetime.datetime.now(ZoneInfo("Europe/Stockholm")).strftime('%Y-%m-%dT%H:%M:%S')
         os.makedirs(CSV_OUTPUT_DIR, exist_ok=True)
         
         # Combine data from all pages
